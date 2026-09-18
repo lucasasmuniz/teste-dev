@@ -11,18 +11,23 @@ não ter resposta.
 
 **CEP**:
 A chave de consulta: oito dígitos que identificam um logradouro ou uma
-localidade no Brasil. Normalizado para dígitos puros antes de qualquer uso.
-_Avoid_: zipcode, código postal, postal code
+localidade no Brasil. Aceito só nas formas em que é escrito de fato (`01310930`,
+`01310-930`, `01.310-930`, `01310 930`) e normalizado para dígitos puros antes
+de qualquer uso; qualquer outra forma é recusada.
+_Em código_: `zipCode`
+_Avoid_: código postal, postal code
 
 **Endereço canônico**:
 O contrato único de saída da API, idêntico independentemente de qual provider
 respondeu. É o nosso formato, não o de ninguém de fora.
+_Em código_: `CanonicalAddress`
 _Avoid_: DTO, payload, resposta da API
 
 **Endereço vencido**:
 Um endereço canônico que passou da janela em que o consideramos atual, mas que
 ainda é servível quando não há nenhum provider capaz de responder. Sempre sai
 marcado como tal — entregar endereço vencido sem etiqueta seria mentir.
+_Em código_: expired address
 _Avoid_: stale, cache velho, dado sujo
 
 ### Os providers
@@ -32,18 +37,21 @@ Uma API externa de CEP que pode nos responder (ViaCEP, BrasilAPI). Cada um tem
 sua própria base de dados; eles podem discordar, e discordam.
 O que acontece dentro de um provider — inclusive consultar outro provider — é
 opaco para nós: julgamos só o que ele responde.
+_Em código_: `Provider`
 _Avoid_: fonte, API externa, serviço, integração, vendor
 
 **Adapter**:
 O que traduz um provider específico para a nossa língua: monta a consulta e
 converte a resposta dele em endereço canônico. É a única parte do sistema que
 sabe que aquele provider existe.
+_Em código_: `Adapter`
 _Avoid_: client, gateway, wrapper, integração
 
 **Falha de provider**:
 Um provider não conseguiu nos dar uma resposta utilizável — porque demorou,
 porque errou, ou porque respondeu algo que não bate o contrato dele. É uma
 afirmação sobre o provider, nunca sobre o CEP.
+_Em código_: provider failure
 _Avoid_: erro, exceção, indisponibilidade
 
 ### As respostas negativas
@@ -51,12 +59,14 @@ _Avoid_: erro, exceção, indisponibilidade
 **Ausência confirmada**:
 Todos os providers que conseguimos alcançar disseram que não conhecem aquele
 CEP. É a única base para afirmar ao cliente que o CEP não existe.
+_Em código_: confirmed absence
 _Avoid_: not found, 404, CEP inválido, CEP inexistente
 
 **Ausência parcial**:
 Ao menos um provider disse que não conhece o CEP, e ao menos um outro não
 respondeu. Vale como resposta ao cliente, mas não como conclusão sobre o CEP —
 a evidência está incompleta.
+_Em código_: partial absence
 _Avoid_: not found parcial, 404 fraco
 
 ### O estado do sistema
@@ -64,4 +74,5 @@ _Avoid_: not found parcial, 404 fraco
 **Modo degradado**:
 A API continua respondendo corretamente, mas com menos providers disponíveis do
 que o normal. É um estado esperado e observável, não uma falha.
+_Em código_: degraded mode
 _Avoid_: fora do ar, quebrado, com erro

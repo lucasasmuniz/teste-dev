@@ -5,6 +5,11 @@ de lá (**provider**, **adapter**, **falha de provider**, **ausência confirmada
 **ausência parcial**, **endereço vencido**, **modo degradado**) e não invente
 sinônimos.
 
+O código é todo em inglês — identificadores, arquivos, mensagens de log, erros
+e o contrato de saída; a documentação (`.md`) fica em português. Cada termo do
+glossário traz seu nome em código numa linha _Em código_; use esse nome. A rota
+`GET /cep/{cep}` é a única exceção, porque o enunciado a define.
+
 ## Antes de mexer
 
 Leia o ADR da área que você vai tocar. Eles são curtos e existem para você não
@@ -29,8 +34,9 @@ nos testes existentes se você não escrever o teste certo.
   sistema tira providers saudáveis de jogo por causa de dados. É a invariante
   central.
 - **A porta do provider nunca lança.** Adapter devolve resultado discriminado
-  com uma razão da união fechada. Existe **um** `throw` no sistema, no
-  orquestrador, e **um** exception filter.
+  com uma razão da união fechada. No fluxo de consulta existe **um** `throw`,
+  no orquestrador, e o sistema tem **um** exception filter. A validação de
+  entrada rejeita pelo pipe do Nest e cai no mesmo filter (ADR-0003).
 - **Frescor não é o TTL do store.** O TTL do store é a janela de vencimento; o
   valor carrega o instante da gravação e o frescor é calculado na leitura. Se
   inverter, endereço vencido deixa de existir.
@@ -48,6 +54,11 @@ Dois seams, e só dois. O primário é o **HTTP de saída**, interceptado, com a
 exercida ponta a ponta. O secundário é a **interface do adapter**, com adapters
 falsos em memória, usado apenas onde o teste precisa manipular o relógio
 (circuito, orçamento de tempo).
+
+Exceção explícita: `ExplodeController` em `test/app.ts`, rotas que só existem
+nos testes e lançam um erro qualquer e um `HttpException` 5xx. Nenhuma rota real
+falha assim, e os caminhos de 5xx (sem vazar nada no corpo, com o erro no log)
+precisam ser exercidos pelo HTTP. Revisitar quando houver um caminho real que o provoque.
 
 Não mocke `fetch` e não substitua a store de cache por uma falsa — os dois
 afirmariam implementação em vez de comportamento.

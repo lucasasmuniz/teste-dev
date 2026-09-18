@@ -2,16 +2,21 @@
 
 O idiomático em NestJS seria cada adapter lançar exceções tipadas e o
 orquestrador apanhá-las. Optamos pelo contrário: o adapter **nunca lança** e
-devolve `{ ok: true, endereco } | { ok: false, reason }`, onde `reason` é uma
+devolve `{ ok: true, address } | { ok: false, reason }`, onde `reason` é uma
 união fechada (`timeout | http_error | schema_invalid | not_found | capped`).
 Falha de provider aqui não é excepcional, é o caso de uso — e tratá-la como
 dado, em vez de como fluxo de exceção, torna-a diretamente consumível pelo
 circuit breaker, pelo log estruturado e pelo corpo do erro.
 
-O sistema inteiro tem **um** `throw`: o orquestrador lançando uma exceção de
+O fluxo de consulta tem **um** `throw`: o orquestrador lançando uma exceção de
 domínio quando todos os caminhos se esgotaram. Um único exception filter global
 traduz isso para `application/problem+json`, e também captura o inesperado
 (500 sem vazar stack, com o identificador da requisição no log).
+
+Fora desse fluxo, a validação de entrada rejeita pela via idiomática do Nest — o
+pipe de validação lança a exceção de domínio `MalformedZipCode` — e cai no mesmo
+filter; não é um segundo caminho de erro, é a porta de entrada recusando a
+requisição antes de qualquer provider ser consultado.
 
 ## Consequências
 

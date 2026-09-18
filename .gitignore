@@ -1,0 +1,16 @@
+# Agent scratch space — specs e tickets locais, não fazem parte da entrega
+.scratch/
+
+# Node
+node_modules/
+dist/
+coverage/
+*.log
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Configuração local de skills de agente — não faz parte da entrega
+docs/agents/

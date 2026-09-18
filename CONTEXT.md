@@ -30,6 +30,8 @@ _Avoid_: stale, cache velho, dado sujo
 **Provider**:
 Uma API externa de CEP que pode nos responder (ViaCEP, BrasilAPI). Cada um tem
 sua própria base de dados; eles podem discordar, e discordam.
+O que acontece dentro de um provider — inclusive consultar outro provider — é
+opaco para nós: julgamos só o que ele responde.
 _Avoid_: fonte, API externa, serviço, integração, vendor
 
 **Adapter**:

@@ -38,8 +38,10 @@ export class CircuitBreakers {
       lookups.map(({ provider }) => [
         provider,
         new CircuitBreaker(
-          config.CIRCUIT_FAILURE_THRESHOLD,
-          config.CIRCUIT_COOLDOWN_MS,
+          {
+            failureThreshold: config.CIRCUIT_FAILURE_THRESHOLD,
+            cooldownMs: config.CIRCUIT_COOLDOWN_MS,
+          },
           (from, to) => this.report({ provider, from, to }),
         ),
       ]),
@@ -68,8 +70,7 @@ export class CircuitBreaker {
   private probeInFlight = false;
 
   constructor(
-    private readonly failureThreshold: number,
-    private readonly cooldownMs: number,
+    private readonly policy: CircuitPolicy,
     private readonly onChange: (from: CircuitState, to: CircuitState) => void,
   ) {}
 
@@ -80,7 +81,7 @@ export class CircuitBreaker {
   tryAcquire(): Permit | null {
     if (
       this.current === CircuitState.Open &&
-      performance.now() - this.openedAt >= this.cooldownMs
+      performance.now() - this.openedAt >= this.policy.cooldownMs
     ) {
       this.moveTo(CircuitState.HalfOpen);
     }
@@ -107,7 +108,7 @@ export class CircuitBreaker {
     }
     if (health === Health.Failing) {
       this.consecutiveFailures++;
-      if (this.consecutiveFailures >= this.failureThreshold) {
+      if (this.consecutiveFailures >= this.policy.failureThreshold) {
         this.openedAt = performance.now();
         this.moveTo(CircuitState.Open);
       }
@@ -121,6 +122,11 @@ export class CircuitBreaker {
       this.onChange(previous, next);
     }
   }
+}
+
+interface CircuitPolicy {
+  failureThreshold: number;
+  cooldownMs: number;
 }
 
 interface StateChange {

@@ -3,6 +3,7 @@ import { setupServer } from 'msw/node';
 import brasilApi00000001 from './fixtures/brasilapi/00000001.json' with { type: 'json' };
 import brasilApi50680000 from './fixtures/brasilapi/50680000.json' with { type: 'json' };
 import brasilApi99990000 from './fixtures/brasilapi/99990000.json' with { type: 'json' };
+import viaCep00000001 from './fixtures/viacep/00000001.json' with { type: 'json' };
 import viaCep50680000 from './fixtures/viacep/50680000.json' with { type: 'json' };
 import viaCep99990000 from './fixtures/viacep/99990000.json' with { type: 'json' };
 
@@ -10,6 +11,7 @@ export const VIACEP_URL = 'https://viacep.com.br/ws/:cep/json/';
 export const BRASILAPI_URL = 'https://brasilapi.com.br/api/cep/v1/:cep';
 
 const viaCepFixtures = {
+  '00000001': viaCep00000001,
   '50680000': viaCep50680000,
   '99990000': viaCep99990000,
 };

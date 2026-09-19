@@ -9,6 +9,11 @@ import { fetchJson } from './fetch-json.js';
 
 const BASE_URL = 'https://brasilapi.com.br/api/cep/v1';
 
+const notFoundSchema = z.object({
+  name: z.literal('CepPromiseError'),
+  type: z.literal('service_error'),
+});
+
 const responseSchema = z.object({
   street: z.string(),
   neighborhood: z.string(),
@@ -27,6 +32,12 @@ export class BrasilApiLookup implements AddressLookup {
     const response = await fetchJson(`${BASE_URL}/${zipCode}`, signal);
     if (!response.ok) {
       return response;
+    }
+    if (
+      response.status === 404 &&
+      notFoundSchema.safeParse(response.body).success
+    ) {
+      return { ok: false, reason: FailureReason.NotFound };
     }
     if (response.status !== 200) {
       return { ok: false, reason: FailureReason.HttpError };

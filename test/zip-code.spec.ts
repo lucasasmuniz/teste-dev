@@ -197,9 +197,122 @@ describe('GET /cep/:cep', () => {
     ]);
   });
 
-  it('treats a BrasilAPI 404 as an http_error for now', async () => {
+  it('responds 404 when every provider denies knowing the zip code', async () => {
+    const res = await request(app.getHttpServer()).get('/cep/00000001');
+
+    expect(res.status).toBe(404);
+    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+    expect(res.body).toEqual({
+      type: '/problems/confirmed-absence',
+      title: 'Zip code does not exist',
+      status: 404,
+      detail: 'Every provider we reached does not know this zip code.',
+      attempts: [
+        { provider: 'viacep', reason: 'not_found' },
+        { provider: 'brasilapi', reason: 'not_found' },
+      ],
+      instance: '/cep/00000001',
+    });
+    expect(attemptsOf(res.headers['request-id'])).toEqual([
+      expect.objectContaining({
+        level: 30,
+        provider: 'viacep',
+        result: 'not_found',
+      }),
+      expect.objectContaining({
+        level: 30,
+        provider: 'brasilapi',
+        result: 'not_found',
+      }),
+    ]);
+    expect(summariesOf(res.headers['request-id'])).toEqual([
+      expect.objectContaining({
+        level: 30,
+        result: 'confirmed_absence',
+        providers: ['viacep', 'brasilapi'],
+      }),
+    ]);
+  });
+
+  it('responds 404 when one provider denies and the other is down, logging the conclusion as partial', async () => {
+    providerStubs.use(
+      http.get(BRASILAPI_URL, () => new HttpResponse(null, { status: 500 })),
+    );
+
+    const res = await request(app.getHttpServer()).get('/cep/00000001');
+
+    expect(res.status).toBe(404);
+    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+    expect(res.body).toEqual({
+      type: '/problems/partial-absence',
+      title: 'Zip code absence is unconfirmed',
+      status: 404,
+      detail:
+        'A provider does not know this zip code, but another could not answer.',
+      attempts: [
+        { provider: 'viacep', reason: 'not_found' },
+        { provider: 'brasilapi', reason: 'http_error' },
+      ],
+      instance: '/cep/00000001',
+    });
+    expect(attemptsOf(res.headers['request-id'])).toEqual([
+      expect.objectContaining({
+        level: 30,
+        provider: 'viacep',
+        result: 'not_found',
+      }),
+      expect.objectContaining({
+        level: 40,
+        provider: 'brasilapi',
+        result: 'http_error',
+      }),
+    ]);
+    expect(summariesOf(res.headers['request-id'])).toEqual([
+      expect.objectContaining({
+        level: 40,
+        result: 'partial_absence',
+        providers: ['viacep', 'brasilapi'],
+      }),
+    ]);
+  });
+
+  it('answers 200 when one provider denies and the other finds the address', async () => {
+    providerStubs.use(
+      http.get(VIACEP_URL, () => HttpResponse.json({ erro: 'true' })),
+    );
+
+    const res = await request(app.getHttpServer()).get('/cep/50680000');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['address-provider']).toBe('brasilapi');
+    expect(res.body.city).toBe('Recife');
+    expect(attemptsOf(res.headers['request-id'])).toEqual([
+      expect.objectContaining({ provider: 'viacep', result: 'not_found' }),
+      expect.objectContaining({ provider: 'brasilapi', result: 'ok' }),
+    ]);
+  });
+
+  it('reads a ViaCEP erro that is not the string "true" as outside its contract', async () => {
+    providerStubs.use(
+      http.get(VIACEP_URL, () => HttpResponse.json({ erro: true })),
+      http.get(BRASILAPI_URL, () => new HttpResponse(null, { status: 500 })),
+    );
+
+    const res = await request(app.getHttpServer()).get('/cep/50680000');
+
+    expect(res.status).toBe(503);
+    expect(res.body.attempts).toEqual([
+      { provider: 'viacep', reason: 'schema_invalid' },
+      { provider: 'brasilapi', reason: 'http_error' },
+    ]);
+  });
+
+  it('treats a BrasilAPI 404 that is not a CepPromiseError service_error as a provider failure', async () => {
     providerStubs.use(
       http.get(VIACEP_URL, () => new HttpResponse(null, { status: 500 })),
+      http.get(BRASILAPI_URL, () =>
+        HttpResponse.html('<html>Not Found</html>', { status: 404 }),
+      ),
     );
 
     const res = await request(app.getHttpServer()).get('/cep/00000001');

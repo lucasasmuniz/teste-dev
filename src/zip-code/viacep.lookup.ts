@@ -9,6 +9,9 @@ import { fetchJson } from './fetch-json.js';
 
 const BASE_URL = 'https://viacep.com.br/ws';
 
+// ViaCEP denies with 200 and `erro` as the string "true", not a boolean.
+const notFoundSchema = z.object({ erro: z.literal('true') });
+
 const responseSchema = z.object({
   logradouro: z.string(),
   complemento: z.string(),
@@ -27,6 +30,9 @@ export class ViaCepLookup implements AddressLookup {
     }
     if (response.status !== 200) {
       return { ok: false, reason: FailureReason.HttpError };
+    }
+    if (notFoundSchema.safeParse(response.body).success) {
+      return { ok: false, reason: FailureReason.NotFound };
     }
     const parsed = responseSchema.safeParse(response.body);
     if (!parsed.success) {

@@ -8,7 +8,12 @@ import {
   type LookupResult,
 } from './address-lookup.js';
 import type { CanonicalAddress } from './canonical-address.js';
-import { ProvidersExhausted, type Attempt } from './problems.js';
+import {
+  ConfirmedAbsence,
+  PartialAbsence,
+  ProvidersExhausted,
+  type Attempt,
+} from './problems.js';
 
 @Injectable()
 export class AddressResolver {
@@ -64,13 +69,14 @@ export class AddressResolver {
       attempts.push({ provider: lookup.provider, reason: result.reason });
     }
 
+    const conclusion = concludeFrom(attempts);
     this.summarize(
       zipCode,
       startedAt,
-      'providers_exhausted',
+      conclusion.result,
       attempts.map((attempt) => attempt.provider),
     );
-    throw new ProvidersExhausted(attempts);
+    throw conclusion.problem;
   }
 
   private rotation(): AddressLookup[] {
@@ -90,7 +96,8 @@ export class AddressResolver {
       lookup.lookup(zipCode, signal),
     );
     const durationMs = elapsedSince(startedAt);
-    this.logger[result.ok ? 'info' : 'warn'](
+    const answered = result.ok || result.reason === FailureReason.NotFound;
+    this.logger[answered ? 'info' : 'warn'](
       {
         provider: lookup.provider,
         zipCode,
@@ -106,15 +113,39 @@ export class AddressResolver {
   private summarize(
     zipCode: string,
     startedAt: number,
-    result: 'ok' | 'providers_exhausted',
+    result: 'ok' | Conclusion['result'],
     providers: string[],
   ) {
-    const answeredAtFirstTry = result === 'ok' && providers.length === 1;
-    this.logger[answeredAtFirstTry ? 'info' : 'warn'](
+    const expected =
+      (result === 'ok' && providers.length === 1) ||
+      result === 'confirmed_absence';
+    this.logger[expected ? 'info' : 'warn'](
       { zipCode, result, providers, durationMs: elapsedSince(startedAt) },
       'lookup summary',
     );
   }
+}
+
+function concludeFrom(attempts: Attempt[]): Conclusion {
+  const notFoundCount = attempts.filter(
+    (attempt) => attempt.reason === FailureReason.NotFound,
+  ).length;
+  if (notFoundCount > 0 && notFoundCount === attempts.length) {
+    return {
+      result: 'confirmed_absence',
+      problem: new ConfirmedAbsence(attempts),
+    };
+  }
+  if (notFoundCount > 0) {
+    return {
+      result: 'partial_absence',
+      problem: new PartialAbsence(attempts),
+    };
+  }
+  return {
+    result: 'providers_exhausted',
+    problem: new ProvidersExhausted(attempts),
+  };
 }
 
 async function withTimeout(
@@ -144,3 +175,8 @@ export interface Resolution {
   provider: string;
   durationMs: number;
 }
+
+type Conclusion =
+  | { result: 'confirmed_absence'; problem: ConfirmedAbsence }
+  | { result: 'partial_absence'; problem: PartialAbsence }
+  | { result: 'providers_exhausted'; problem: ProvidersExhausted };

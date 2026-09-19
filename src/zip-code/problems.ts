@@ -19,6 +19,31 @@ export class ProvidersExhausted extends Problem {
   }
 }
 
+export class ConfirmedAbsence extends Problem {
+  readonly type = '/problems/confirmed-absence';
+  readonly title = 'Zip code does not exist';
+  readonly status = 404;
+
+  constructor(attempts: Attempt[]) {
+    super('Every provider we reached does not know this zip code.', {
+      attempts,
+    });
+  }
+}
+
+export class PartialAbsence extends Problem {
+  readonly type = '/problems/partial-absence';
+  readonly title = 'Zip code absence is unconfirmed';
+  readonly status = 404;
+
+  constructor(attempts: Attempt[]) {
+    super(
+      'A provider does not know this zip code, but another could not answer.',
+      { attempts },
+    );
+  }
+}
+
 export interface Attempt {
   provider: string;
   reason: FailureReason;

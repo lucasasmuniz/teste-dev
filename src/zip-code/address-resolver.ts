@@ -5,9 +5,14 @@ import {
   ADDRESS_LOOKUPS,
   FailureReason,
   type AddressLookup,
-  type LookupResult,
 } from './address-lookup.js';
 import type { CanonicalAddress } from './canonical-address.js';
+import { CircuitBreakers } from './circuit-breakers.js';
+import {
+  elapsedSince,
+  GuardedLookup,
+  RequestBudget,
+} from './guarded-lookup.js';
 import {
   ConfirmedAbsence,
   PartialAbsence,
@@ -17,59 +22,59 @@ import {
 
 @Injectable()
 export class AddressResolver {
-  private readonly timeoutMs: number;
   private readonly budgetMs: number;
+  private readonly retryAfterSeconds: number;
+  private readonly guarded: GuardedLookup[];
   private nextStart = 0;
 
   constructor(
     @Inject(CONFIG) config: Config,
-    @Inject(ADDRESS_LOOKUPS) private readonly lookups: AddressLookup[],
+    @Inject(ADDRESS_LOOKUPS) lookups: AddressLookup[],
+    breakers: CircuitBreakers,
     private readonly logger: PinoLogger,
   ) {
-    this.timeoutMs = config.PROVIDER_TIMEOUT_MS;
-    this.budgetMs = config.REQUEST_BUDGET_MS;
     logger.setContext(AddressResolver.name);
+    this.budgetMs = config.REQUEST_BUDGET_MS;
+    this.retryAfterSeconds = breakers.retryAfterSeconds;
+    this.guarded = lookups.map(
+      (lookup) =>
+        new GuardedLookup(
+          lookup,
+          breakers.for(lookup.provider),
+          config.PROVIDER_TIMEOUT_MS,
+          logger,
+        ),
+    );
   }
 
+  /**
+   * Asks providers in round-robin order, falling back on failure or absence,
+   * and returns within the request budget. Throws only the problem that
+   * concludes the lookup: `ConfirmedAbsence`, `PartialAbsence` or
+   * `ProvidersExhausted`.
+   */
   async resolve(zipCode: string): Promise<Resolution> {
     const startedAt = performance.now();
-    const deadline = startedAt + this.budgetMs;
+    const budget = new RequestBudget(this.budgetMs);
     const attempts: Attempt[] = [];
 
-    for (const lookup of this.rotation()) {
-      const remainingMs = deadline - performance.now();
-      if (remainingMs <= 0) {
-        this.logger.warn(
-          { provider: lookup.provider, zipCode, result: FailureReason.Timeout },
-          'provider skipped, request budget exhausted',
-        );
-        attempts.push({
-          provider: lookup.provider,
-          reason: FailureReason.Timeout,
-        });
-        continue;
-      }
-      const { result, durationMs } = await this.attempt(
-        lookup,
-        zipCode,
-        attempts.length + 1,
-        Math.min(this.timeoutMs, remainingMs),
-      );
-      if (result.ok) {
+    for (const guarded of this.rotation()) {
+      const outcome = await guarded.lookup(zipCode, budget);
+      if (outcome.ok) {
         this.summarize(zipCode, startedAt, 'ok', [
           ...attempts.map((attempt) => attempt.provider),
-          lookup.provider,
+          guarded.provider,
         ]);
         return {
-          address: result.address,
-          provider: lookup.provider,
-          durationMs,
+          address: outcome.address,
+          provider: guarded.provider,
+          durationMs: outcome.durationMs,
         };
       }
-      attempts.push({ provider: lookup.provider, reason: result.reason });
+      attempts.push({ provider: guarded.provider, reason: outcome.reason });
     }
 
-    const conclusion = concludeFrom(attempts);
+    const conclusion = concludeFrom(attempts, this.retryAfterSeconds);
     this.summarize(
       zipCode,
       startedAt,
@@ -79,35 +84,10 @@ export class AddressResolver {
     throw conclusion.problem;
   }
 
-  private rotation(): AddressLookup[] {
+  private rotation(): GuardedLookup[] {
     const start = this.nextStart;
-    this.nextStart = (start + 1) % this.lookups.length;
-    return [...this.lookups.slice(start), ...this.lookups.slice(0, start)];
-  }
-
-  private async attempt(
-    lookup: AddressLookup,
-    zipCode: string,
-    attemptNumber: number,
-    timeoutMs: number,
-  ): Promise<{ result: LookupResult; durationMs: number }> {
-    const startedAt = performance.now();
-    const result = await withTimeout(timeoutMs, (signal) =>
-      lookup.lookup(zipCode, signal),
-    );
-    const durationMs = elapsedSince(startedAt);
-    const answered = result.ok || result.reason === FailureReason.NotFound;
-    this.logger[answered ? 'info' : 'warn'](
-      {
-        provider: lookup.provider,
-        zipCode,
-        attempt: attemptNumber,
-        result: result.ok ? 'ok' : result.reason,
-        durationMs,
-      },
-      'provider attempt',
-    );
-    return { result, durationMs };
+    this.nextStart = (start + 1) % this.guarded.length;
+    return [...this.guarded.slice(start), ...this.guarded.slice(0, start)];
   }
 
   private summarize(
@@ -126,7 +106,10 @@ export class AddressResolver {
   }
 }
 
-function concludeFrom(attempts: Attempt[]): Conclusion {
+function concludeFrom(
+  attempts: Attempt[],
+  retryAfterSeconds: number,
+): Conclusion {
   const notFoundCount = attempts.filter(
     (attempt) => attempt.reason === FailureReason.NotFound,
   ).length;
@@ -144,30 +127,8 @@ function concludeFrom(attempts: Attempt[]): Conclusion {
   }
   return {
     result: 'providers_exhausted',
-    problem: new ProvidersExhausted(attempts),
+    problem: new ProvidersExhausted(attempts, retryAfterSeconds),
   };
-}
-
-async function withTimeout(
-  timeoutMs: number,
-  run: (signal: AbortSignal) => Promise<LookupResult>,
-): Promise<LookupResult> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const timedOut = new Promise<LookupResult>((resolve) => {
-    controller.signal.addEventListener('abort', () =>
-      resolve({ ok: false, reason: FailureReason.Timeout }),
-    );
-  });
-  try {
-    return await Promise.race([run(controller.signal), timedOut]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function elapsedSince(startedAt: number): number {
-  return Math.round(performance.now() - startedAt);
 }
 
 export interface Resolution {

@@ -11,6 +11,8 @@ describe('configuration', () => {
     vi.stubEnv('LOG_LEVEL', undefined);
     vi.stubEnv('PROVIDER_TIMEOUT_MS', undefined);
     vi.stubEnv('REQUEST_BUDGET_MS', undefined);
+    vi.stubEnv('CIRCUIT_FAILURE_THRESHOLD', undefined);
+    vi.stubEnv('CIRCUIT_COOLDOWN_MS', undefined);
 
     const { app } = await createApp();
     const res = await request(app.getHttpServer()).get('/cep/50680000');
@@ -24,6 +26,8 @@ describe('configuration', () => {
     vi.stubEnv('LOG_LEVEL', 'test');
     vi.stubEnv('PROVIDER_TIMEOUT_MS', 'test');
     vi.stubEnv('REQUEST_BUDGET_MS', 'test');
+    vi.stubEnv('CIRCUIT_FAILURE_THRESHOLD', 'test');
+    vi.stubEnv('CIRCUIT_COOLDOWN_MS', 'test');
 
     await expect(createApp()).rejects.toMatchObject({
       issues: {
@@ -31,6 +35,8 @@ describe('configuration', () => {
         LOG_LEVEL: expect.objectContaining({ value: 'test' }),
         PROVIDER_TIMEOUT_MS: expect.objectContaining({ value: 'test' }),
         REQUEST_BUDGET_MS: expect.objectContaining({ value: 'test' }),
+        CIRCUIT_FAILURE_THRESHOLD: expect.objectContaining({ value: 'test' }),
+        CIRCUIT_COOLDOWN_MS: expect.objectContaining({ value: 'test' }),
       },
     });
   });

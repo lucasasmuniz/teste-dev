@@ -176,6 +176,7 @@ describe('GET /cep/:cep', () => {
 
     expect(res.status).toBe(503);
     expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+    expect(res.headers['retry-after']).toBe('30');
     expect(res.headers['address-provider']).toBeUndefined();
     expect(res.body).toEqual({
       type: '/problems/providers-exhausted',
@@ -401,4 +402,25 @@ describe('GET /cep/:cep', () => {
       (l) => l.requestId === requestId && l.msg === 'lookup summary',
     );
   }
+});
+
+describe('GET /cep/:cep with a custom circuit cooldown', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('ties Retry-After to the cooldown, rounded up to whole seconds', async () => {
+    vi.stubEnv('CIRCUIT_COOLDOWN_MS', '45500');
+    const { app } = await createApp();
+    providerStubs.use(
+      http.get(VIACEP_URL, () => new HttpResponse(null, { status: 500 })),
+      http.get(BRASILAPI_URL, () => new HttpResponse(null, { status: 500 })),
+    );
+
+    const res = await request(app.getHttpServer()).get('/cep/50680000');
+    await app.close();
+
+    expect(res.status).toBe(503);
+    expect(res.headers['retry-after']).toBe('46');
+  });
 });

@@ -12,10 +12,12 @@ export class ProvidersExhausted extends Problem {
   readonly title = 'No provider could answer';
   readonly status = 503;
 
-  constructor(attempts: Attempt[]) {
-    super('No provider returned a usable answer for this zip code.', {
-      attempts,
-    });
+  constructor(attempts: Attempt[], retryAfterSeconds: number) {
+    super(
+      'No provider returned a usable answer for this zip code.',
+      { attempts },
+      { 'Retry-After': String(retryAfterSeconds) },
+    );
   }
 }
 

@@ -3,7 +3,10 @@
 O idiomático em NestJS seria cada adapter lançar exceções tipadas e o
 orquestrador apanhá-las. Optamos pelo contrário: o adapter **nunca lança** e
 devolve `{ ok: true, address } | { ok: false, reason }`, onde `reason` é uma
-união fechada (`timeout | http_error | schema_invalid | not_found | capped`).
+união fechada (`timeout | http_error | schema_invalid | not_found | capped |
+circuit_open`). `capped` e `circuit_open` nunca saem de um adapter — quem os
+produz é a camada de resiliência —, mas vivem na mesma união para que
+tentativa, log e corpo do erro falem um vocabulário só.
 Falha de provider aqui não é excepcional, é o caso de uso — e tratá-la como
 dado, em vez de como fluxo de exceção, torna-a diretamente consumível pelo
 circuit breaker, pelo log estruturado e pelo corpo do erro.

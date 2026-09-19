@@ -27,6 +27,7 @@ export const FailureReason = {
   SchemaInvalid: 'schema_invalid',
   NotFound: 'not_found',
   Capped: 'capped',
+  CircuitOpen: 'circuit_open',
 } as const;
 
 export type FailureReason = (typeof FailureReason)[keyof typeof FailureReason];

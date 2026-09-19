@@ -20,12 +20,13 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     const http = host.switchToHttp();
     const req = http.getRequest<Request>();
     const res = http.getResponse<Response>();
-    const { problem, log } = classify(exception, req);
+    const { problem, headers, log } = classify(exception, req);
 
     if (log) {
       this.logger[severityFor(problem.status)](log.fields, log.message);
     }
     res
+      .set(headers)
       .status(problem.status)
       .type('application/problem+json')
       .json({ ...problem, instance: req.originalUrl });
@@ -34,9 +35,10 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 
 function classify(exception: unknown, req: Request): Outcome {
   if (exception instanceof Problem) {
-    const { type, title, status, detail, extensions } = exception;
+    const { type, title, status, detail, extensions, headers } = exception;
     return {
       problem: { ...extensions, type, title, status, detail },
+      headers,
       log: {
         fields: { problemType: type, status, detail, params: req.params },
         message:
@@ -80,5 +82,6 @@ interface ProblemDetails {
 
 interface Outcome {
   problem: ProblemDetails;
+  headers?: Record<string, string>;
   log?: { fields: Record<string, unknown>; message: string };
 }

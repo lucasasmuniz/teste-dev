@@ -6,6 +6,7 @@ export abstract class Problem extends Error {
   constructor(
     readonly detail: string,
     readonly extensions: Record<string, unknown> = {},
+    readonly headers: Record<string, string> = {},
   ) {
     super(detail);
   }

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ADDRESS_LOOKUPS } from './address-lookup.js';
 import { AddressResolver } from './address-resolver.js';
 import { BrasilApiLookup } from './brasilapi.lookup.js';
+import { CircuitBreakers } from './circuit-breakers.js';
 import { ViaCepLookup } from './viacep.lookup.js';
 import { ZipCodeController } from './zip-code.controller.js';
 
@@ -9,6 +10,7 @@ import { ZipCodeController } from './zip-code.controller.js';
   controllers: [ZipCodeController],
   providers: [
     AddressResolver,
+    CircuitBreakers,
     {
       provide: ADDRESS_LOOKUPS,
       useFactory: () => [new ViaCepLookup(), new BrasilApiLookup()],

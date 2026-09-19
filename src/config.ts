@@ -8,6 +8,8 @@ const configSchema = z.object({
     .default('info'),
   PROVIDER_TIMEOUT_MS: z.coerce.number().int().positive().default(3000),
   REQUEST_BUDGET_MS: z.coerce.number().int().positive().default(7000),
+  CIRCUIT_FAILURE_THRESHOLD: z.coerce.number().int().positive().default(5),
+  CIRCUIT_COOLDOWN_MS: z.coerce.number().int().positive().default(30000),
 });
 
 export const CONFIG = Symbol('CONFIG');

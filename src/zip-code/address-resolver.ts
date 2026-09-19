@@ -30,7 +30,10 @@ export class AddressResolver {
         new GuardedLookup(
           lookup,
           breakers.for(lookup.provider),
-          config.PROVIDER_TIMEOUT_MS,
+          {
+            timeoutMs: config.PROVIDER_TIMEOUT_MS,
+            maxConcurrency: config.PROVIDER_MAX_CONCURRENCY,
+          },
           logger,
         ),
     );

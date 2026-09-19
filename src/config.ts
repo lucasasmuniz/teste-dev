@@ -19,6 +19,9 @@ const configSchema = z
       .default(604_800_000),
     CACHE_ABSENCE_TTL_MS: z.coerce.number().int().positive().default(3_600_000),
     CACHE_MAX_ENTRIES: z.coerce.number().int().positive().default(10000),
+    RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
+    RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
+    PROVIDER_MAX_CONCURRENCY: z.coerce.number().int().positive().default(20),
   })
   .refine((config) => config.CACHE_EXPIRED_WINDOW_MS > config.CACHE_FRESH_MS, {
     path: ['CACHE_EXPIRED_WINDOW_MS'],

@@ -12,16 +12,19 @@ import {
 } from './circuit-breakers.js';
 
 /**
- * One provider behind its circuit, the request budget and the attempt
- * timeout. Never throws unless the adapter breaks its own promise not to.
- * Every call settles the circuit permit it took, and a provider it skips comes
- * back as `circuit_open` or `timeout` without being called.
+ * One provider behind its circuit, its concurrency cap, the request budget and
+ * the attempt timeout. Never throws unless the adapter breaks its own promise
+ * not to. Every call settles the circuit permit it took, and a provider it
+ * skips comes back as `circuit_open`, `capped` or `timeout` without being
+ * called. A full cap never waits for a free slot.
  */
 export class GuardedLookup {
+  private inFlight = 0;
+
   constructor(
     private readonly adapter: AddressLookup,
     private readonly breaker: CircuitBreaker,
-    private readonly timeoutMs: number,
+    private readonly limits: AttemptLimits,
     private readonly logger: PinoLogger,
   ) {}
 
@@ -41,6 +44,14 @@ export class GuardedLookup {
         'provider skipped by circuit breaker',
       );
     }
+    if (this.inFlight >= this.limits.maxConcurrency) {
+      this.breaker.record(permit, Health.Neutral);
+      return this.skip(
+        zipCode,
+        FailureReason.Capped,
+        'provider skipped, concurrency cap reached',
+      );
+    }
     const remainingMs = budget.remainingMs();
     if (remainingMs <= 0) {
       this.breaker.record(permit, Health.Neutral);
@@ -53,7 +64,7 @@ export class GuardedLookup {
     return this.attempt(
       zipCode,
       budget.countAttempt(),
-      Math.min(this.timeoutMs, remainingMs),
+      Math.min(this.limits.timeoutMs, remainingMs),
       permit,
     );
   }
@@ -84,11 +95,12 @@ export class GuardedLookup {
     const circuit = this.breaker.state;
     const startedAt = performance.now();
     let health: Health = Health.Neutral;
+    this.inFlight++;
     try {
       const result = await withTimeout(timeoutMs, (signal) =>
         this.adapter.lookup(zipCode, signal),
       );
-      health = healthOf(result, timeoutMs < this.timeoutMs);
+      health = healthOf(result, timeoutMs < this.limits.timeoutMs);
       const durationMs = elapsedSince(startedAt);
       const answered = result.ok || result.reason === FailureReason.NotFound;
       this.logger[answered ? 'info' : 'warn'](
@@ -104,6 +116,7 @@ export class GuardedLookup {
       );
       return result.ok ? { ...result, durationMs } : result;
     } finally {
+      this.inFlight--;
       this.breaker.record(permit, health);
     }
   }
@@ -164,6 +177,11 @@ async function withTimeout(
   } finally {
     clearTimeout(timer);
   }
+}
+
+interface AttemptLimits {
+  timeoutMs: number;
+  maxConcurrency: number;
 }
 
 export type GuardedOutcome =

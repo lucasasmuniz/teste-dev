@@ -17,6 +17,9 @@ describe('configuration', () => {
     vi.stubEnv('CACHE_EXPIRED_WINDOW_MS', undefined);
     vi.stubEnv('CACHE_ABSENCE_TTL_MS', undefined);
     vi.stubEnv('CACHE_MAX_ENTRIES', undefined);
+    vi.stubEnv('RATE_LIMIT_MAX', undefined);
+    vi.stubEnv('RATE_LIMIT_WINDOW_MS', undefined);
+    vi.stubEnv('PROVIDER_MAX_CONCURRENCY', undefined);
 
     const { app } = await createApp();
     const res = await request(app.getHttpServer()).get('/cep/50680000');
@@ -36,6 +39,9 @@ describe('configuration', () => {
     vi.stubEnv('CACHE_EXPIRED_WINDOW_MS', 'test');
     vi.stubEnv('CACHE_ABSENCE_TTL_MS', 'test');
     vi.stubEnv('CACHE_MAX_ENTRIES', 'test');
+    vi.stubEnv('RATE_LIMIT_MAX', 'test');
+    vi.stubEnv('RATE_LIMIT_WINDOW_MS', 'test');
+    vi.stubEnv('PROVIDER_MAX_CONCURRENCY', 'test');
 
     await expect(createApp()).rejects.toMatchObject({
       issues: {
@@ -49,6 +55,9 @@ describe('configuration', () => {
         CACHE_EXPIRED_WINDOW_MS: expect.objectContaining({ value: 'test' }),
         CACHE_ABSENCE_TTL_MS: expect.objectContaining({ value: 'test' }),
         CACHE_MAX_ENTRIES: expect.objectContaining({ value: 'test' }),
+        RATE_LIMIT_MAX: expect.objectContaining({ value: 'test' }),
+        RATE_LIMIT_WINDOW_MS: expect.objectContaining({ value: 'test' }),
+        PROVIDER_MAX_CONCURRENCY: expect.objectContaining({ value: 'test' }),
       },
     });
   });

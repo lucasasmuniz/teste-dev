@@ -53,7 +53,8 @@ nos testes existentes se você não escrever o teste certo.
 Dois seams, e só dois. O primário é o **HTTP de saída**, interceptado, com a app
 exercida ponta a ponta. O secundário é a **interface do adapter**, com adapters
 falsos em memória, usado apenas onde o teste precisa manipular o relógio
-(circuito, orçamento de tempo).
+(circuito, orçamento de tempo) ou segurar uma tentativa em voo (teto de
+concorrência).
 
 Exceção explícita: `ExplodeController` em `test/app.ts`, rotas que só existem
 nos testes e lançam um erro qualquer e um `HttpException` 5xx. Nenhuma rota real

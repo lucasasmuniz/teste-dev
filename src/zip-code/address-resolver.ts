@@ -8,22 +8,12 @@ import {
 } from './address-lookup.js';
 import type { CanonicalAddress } from './canonical-address.js';
 import { CircuitBreakers } from './circuit-breakers.js';
-import {
-  elapsedSince,
-  GuardedLookup,
-  RequestBudget,
-} from './guarded-lookup.js';
-import {
-  ConfirmedAbsence,
-  PartialAbsence,
-  ProvidersExhausted,
-  type Attempt,
-} from './problems.js';
+import { GuardedLookup, RequestBudget } from './guarded-lookup.js';
+import type { Attempt } from './problems.js';
 
 @Injectable()
 export class AddressResolver {
   private readonly budgetMs: number;
-  private readonly retryAfterSeconds: number;
   private readonly guarded: GuardedLookup[];
   private nextStart = 0;
 
@@ -31,11 +21,10 @@ export class AddressResolver {
     @Inject(CONFIG) config: Config,
     @Inject(ADDRESS_LOOKUPS) lookups: AddressLookup[],
     breakers: CircuitBreakers,
-    private readonly logger: PinoLogger,
+    logger: PinoLogger,
   ) {
     logger.setContext(AddressResolver.name);
     this.budgetMs = config.REQUEST_BUDGET_MS;
-    this.retryAfterSeconds = breakers.retryAfterSeconds;
     this.guarded = lookups.map(
       (lookup) =>
         new GuardedLookup(
@@ -49,39 +38,26 @@ export class AddressResolver {
 
   /**
    * Asks providers in round-robin order, falling back on failure or absence,
-   * and returns within the request budget. Throws only the problem that
-   * concludes the lookup: `ConfirmedAbsence`, `PartialAbsence` or
-   * `ProvidersExhausted`.
+   * within the request budget.
    */
   async resolve(zipCode: string): Promise<Resolution> {
-    const startedAt = performance.now();
     const budget = new RequestBudget(this.budgetMs);
     const attempts: Attempt[] = [];
 
     for (const guarded of this.rotation()) {
       const outcome = await guarded.lookup(zipCode, budget);
       if (outcome.ok) {
-        this.summarize(zipCode, startedAt, 'ok', [
-          ...attempts.map((attempt) => attempt.provider),
-          guarded.provider,
-        ]);
         return {
+          result: Conclusion.Found,
           address: outcome.address,
           provider: guarded.provider,
           durationMs: outcome.durationMs,
+          attempts,
         };
       }
       attempts.push({ provider: guarded.provider, reason: outcome.reason });
     }
-
-    const conclusion = concludeFrom(attempts, this.retryAfterSeconds);
-    this.summarize(
-      zipCode,
-      startedAt,
-      conclusion.result,
-      attempts.map((attempt) => attempt.provider),
-    );
-    throw conclusion.problem;
+    return { result: concludeFrom(attempts), attempts };
   }
 
   private rotation(): GuardedLookup[] {
@@ -89,55 +65,41 @@ export class AddressResolver {
     this.nextStart = (start + 1) % this.guarded.length;
     return [...this.guarded.slice(start), ...this.guarded.slice(0, start)];
   }
-
-  private summarize(
-    zipCode: string,
-    startedAt: number,
-    result: 'ok' | Conclusion['result'],
-    providers: string[],
-  ) {
-    const expected =
-      (result === 'ok' && providers.length === 1) ||
-      result === 'confirmed_absence';
-    this.logger[expected ? 'info' : 'warn'](
-      { zipCode, result, providers, durationMs: elapsedSince(startedAt) },
-      'lookup summary',
-    );
-  }
 }
 
-function concludeFrom(
-  attempts: Attempt[],
-  retryAfterSeconds: number,
-): Conclusion {
+function concludeFrom(attempts: Attempt[]): Unresolved['result'] {
   const notFoundCount = attempts.filter(
     (attempt) => attempt.reason === FailureReason.NotFound,
   ).length;
   if (notFoundCount > 0 && notFoundCount === attempts.length) {
-    return {
-      result: 'confirmed_absence',
-      problem: new ConfirmedAbsence(attempts),
-    };
+    return Conclusion.ConfirmedAbsence;
   }
   if (notFoundCount > 0) {
-    return {
-      result: 'partial_absence',
-      problem: new PartialAbsence(attempts),
-    };
+    return Conclusion.PartialAbsence;
   }
-  return {
-    result: 'providers_exhausted',
-    problem: new ProvidersExhausted(attempts, retryAfterSeconds),
-  };
+  return Conclusion.ProvidersExhausted;
 }
 
-export interface Resolution {
-  address: CanonicalAddress;
-  provider: string;
-  durationMs: number;
+export type Resolution =
+  | {
+      result: typeof Conclusion.Found;
+      address: CanonicalAddress;
+      provider: string;
+      durationMs: number;
+      attempts: Attempt[];
+    }
+  | Unresolved;
+
+export interface Unresolved {
+  result: Exclude<Conclusion, typeof Conclusion.Found>;
+  attempts: Attempt[];
 }
 
-type Conclusion =
-  | { result: 'confirmed_absence'; problem: ConfirmedAbsence }
-  | { result: 'partial_absence'; problem: PartialAbsence }
-  | { result: 'providers_exhausted'; problem: ProvidersExhausted };
+export const Conclusion = {
+  Found: 'found',
+  ConfirmedAbsence: 'confirmed_absence',
+  PartialAbsence: 'partial_absence',
+  ProvidersExhausted: 'providers_exhausted',
+} as const;
+
+export type Conclusion = (typeof Conclusion)[keyof typeof Conclusion];

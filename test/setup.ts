@@ -13,6 +13,7 @@ beforeAll(() => {
 });
 
 afterEach(() => {
+  providerStubs.events.removeAllListeners();
   providerStubs.resetHandlers();
 });
 

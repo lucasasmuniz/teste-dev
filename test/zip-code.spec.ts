@@ -107,25 +107,40 @@ describe('GET /cep/:cep', () => {
   });
 
   it('alternates providers across requests, with the same output contract from both', async () => {
-    const first = await request(app.getHttpServer()).get('/cep/99990000');
-    const second = await request(app.getHttpServer()).get('/cep/99990000');
-
-    expect(first.headers['address-provider']).toBe('viacep');
-    expect(second.headers['address-provider']).toBe('brasilapi');
-    expect(second.body).toEqual(first.body);
-  });
-
-  it('gives a complete address the same shape whichever provider answered', async () => {
     const fromViaCep = await request(app.getHttpServer()).get('/cep/50680000');
     const fromBrasilApi = await request(app.getHttpServer()).get(
-      '/cep/50680000',
+      '/cep/99990000',
     );
 
+    expect(fromViaCep.headers['address-provider']).toBe('viacep');
     expect(fromBrasilApi.headers['address-provider']).toBe('brasilapi');
     expect(Object.keys(fromBrasilApi.body)).toEqual(
       Object.keys(fromViaCep.body),
     );
-    expect(fromBrasilApi.body.complement).toBeNull();
+    expect(fromBrasilApi.body).toEqual({
+      zipCode: '99990000',
+      street: null,
+      complement: null,
+      neighborhood: null,
+      city: 'Muliterno',
+      state: 'RS',
+    });
+  });
+
+  it('gives a complete address from BrasilAPI with null for the complement it lacks', async () => {
+    await request(app.getHttpServer()).get('/cep/99990000');
+
+    const res = await request(app.getHttpServer()).get('/cep/50680000');
+
+    expect(res.headers['address-provider']).toBe('brasilapi');
+    expect(res.body).toEqual({
+      zipCode: '50680000',
+      street: 'Rua São Mateus',
+      complement: null,
+      neighborhood: 'Iputinga',
+      city: 'Recife',
+      state: 'PE',
+    });
   });
 
   it('exposes provider and attempt duration in Server-Timing', async () => {

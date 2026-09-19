@@ -10,12 +10,12 @@ import type {
 import { AddressResolver } from '../src/zip-code/address-resolver.js';
 import { createApp, type LogLine } from './app.js';
 import viaCep50680000 from './fixtures/viacep/50680000.json' with { type: 'json' };
-import { providerStubs, VIACEP_URL } from './provider-stubs.js';
-
-const PROVIDER_HOSTS: Record<string, string> = {
-  'viacep.com.br': 'viacep',
-  'brasilapi.com.br': 'brasilapi',
-};
+import {
+  anyZipCode,
+  countProviderCalls,
+  providerStubs,
+  VIACEP_URL,
+} from './provider-stubs.js';
 
 class FakeLookup implements AddressLookup {
   calls = 0;
@@ -35,20 +35,14 @@ describe('circuit breaker', () => {
   let app: INestApplication;
   let logs: LogLine[];
   let calls: Record<string, number>;
+  let nextZipCode = 10_000_000;
 
   beforeEach(async () => {
     ({ app, logs } = await createApp());
-    calls = { viacep: 0, brasilapi: 0 };
-    providerStubs.events.on('request:start', ({ request }) => {
-      const provider = PROVIDER_HOSTS[new URL(request.url).hostname];
-      if (provider) {
-        calls[provider]++;
-      }
-    });
+    calls = countProviderCalls();
   });
 
   afterEach(async () => {
-    providerStubs.events.removeAllListeners();
     await app.close();
   });
 
@@ -56,16 +50,23 @@ describe('circuit breaker', () => {
     return request(app.getHttpServer()).get(`/cep/${zipCode}`);
   }
 
-  async function getTimes(times: number, zipCode: string) {
+  // A cached answer never reaches the provider, so a sweep of distinct zip
+  // codes is what keeps the circuit under load.
+  async function getDistinctTimes(times: number) {
     for (let i = 0; i < times; i++) {
-      await get(zipCode);
+      await getDistinct();
     }
   }
 
-  it('never opens on repeated absence: it measures provider health, not whether data exists', async () => {
-    await getTimes(10, '00000001');
+  function getDistinct() {
+    return get(String(nextZipCode++));
+  }
 
-    const res = await get('00000001');
+  it('never opens on repeated absence: it measures provider health, not whether data exists', async () => {
+    providerStubs.use(anyZipCode.viaCepDenies, anyZipCode.brasilApiDenies);
+    await getDistinctTimes(10);
+
+    const res = await getDistinct();
 
     expect(calls).toEqual({ viacep: 11, brasilapi: 11 });
     expect(res.status).toBe(404);
@@ -75,10 +76,11 @@ describe('circuit breaker', () => {
   it('opens after five consecutive failures and stops calling the provider', async () => {
     providerStubs.use(
       http.get(VIACEP_URL, () => new HttpResponse(null, { status: 500 })),
+      anyZipCode.brasilApiAnswers,
     );
-    await getTimes(10, '50680000');
+    await getDistinctTimes(10);
 
-    const res = await get('50680000');
+    const res = await getDistinct();
 
     expect(res.status).toBe(200);
     expect(calls.viacep).toBe(5);
@@ -107,10 +109,11 @@ describe('circuit breaker', () => {
   it('reads absence as partial when the other provider was skipped by its open circuit', async () => {
     providerStubs.use(
       http.get(VIACEP_URL, () => new HttpResponse(null, { status: 500 })),
+      anyZipCode.brasilApiDenies,
     );
-    await getTimes(5, '00000001');
+    await getDistinctTimes(5);
 
-    const res = await get('00000001');
+    const res = await getDistinct();
 
     expect(calls.viacep).toBe(5);
     expect(res.status).toBe(404);
@@ -137,9 +140,10 @@ describe('circuit breaker', () => {
       ];
       providerStubs.use(
         http.get(VIACEP_URL, () => (script.shift() ?? failure)()),
+        anyZipCode.brasilApiDenies,
       );
 
-      await getTimes(10, '00000001');
+      await getDistinctTimes(10);
 
       expect(calls.viacep).toBe(10);
     },
@@ -163,10 +167,7 @@ describe('circuit breaker, on the clock', () => {
   }
 
   function resolve(zipCode = '50680000') {
-    return app
-      .get(AddressResolver)
-      .resolve(zipCode)
-      .catch((error: unknown) => error);
+    return app.get(AddressResolver).resolve(zipCode);
   }
 
   async function resolveTimes(times: number) {
@@ -193,9 +194,7 @@ describe('circuit breaker, on the clock', () => {
     const whileProbing = await resolve();
     expect(recovering.calls).toBe(6);
     expect(whileProbing).toMatchObject({
-      extensions: {
-        attempts: [{ provider: 'recovering', reason: 'circuit_open' }],
-      },
+      attempts: [{ provider: 'recovering', reason: 'circuit_open' }],
     });
 
     answerProbe(await succeed());
@@ -278,7 +277,7 @@ describe('circuit breaker, on the clock', () => {
     await vi.advanceTimersByTimeAsync(30_000);
 
     broken.respond = () => Promise.reject(new Error('adapter bug'));
-    await resolve();
+    await expect(resolve()).rejects.toThrow('adapter bug');
     broken.respond = succeed;
     await resolve();
 
@@ -300,12 +299,10 @@ describe('circuit breaker, on the clock', () => {
     await vi.advanceTimersByTimeAsync(7000);
 
     expect(await second).toMatchObject({
-      extensions: {
-        attempts: [
-          { provider: 'hanging', reason: 'timeout' },
-          { provider: 'failing', reason: 'circuit_open' },
-        ],
-      },
+      attempts: [
+        { provider: 'hanging', reason: 'timeout' },
+        { provider: 'failing', reason: 'circuit_open' },
+      ],
     });
   });
 

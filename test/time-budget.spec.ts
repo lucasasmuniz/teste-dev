@@ -4,7 +4,6 @@ import type {
   LookupResult,
 } from '../src/zip-code/address-lookup.js';
 import { AddressResolver } from '../src/zip-code/address-resolver.js';
-import { ProvidersExhausted } from '../src/zip-code/problems.js';
 import { createApp } from './app.js';
 
 class HangingLookup implements AddressLookup {
@@ -70,22 +69,17 @@ describe('request time budget', () => {
     ({ app } = await createApp({ lookups: [first, second] }));
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
 
-    const outcome = app
-      .get(AddressResolver)
-      .resolve('50680000')
-      .catch((error: unknown) => error);
+    const outcome = app.get(AddressResolver).resolve('50680000');
     await vi.advanceTimersByTimeAsync(7000);
 
     expect(first.abortedAt! - first.startedAt!).toBe(6500);
     expect(second.abortedAt! - second.startedAt!).toBe(500);
-    expect(await outcome).toBeInstanceOf(ProvidersExhausted);
     expect(await outcome).toMatchObject({
-      extensions: {
-        attempts: [
-          { provider: 'first', reason: 'timeout' },
-          { provider: 'second', reason: 'timeout' },
-        ],
-      },
+      result: 'providers_exhausted',
+      attempts: [
+        { provider: 'first', reason: 'timeout' },
+        { provider: 'second', reason: 'timeout' },
+      ],
     });
   });
 
@@ -97,20 +91,16 @@ describe('request time budget', () => {
     ({ app } = await createApp({ lookups: [first, second] }));
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
 
-    const outcome = app
-      .get(AddressResolver)
-      .resolve('50680000')
-      .catch((error: unknown) => error);
+    const outcome = app.get(AddressResolver).resolve('50680000');
     await vi.advanceTimersByTimeAsync(7000);
 
     expect(second.startedAt).toBeUndefined();
     expect(await outcome).toMatchObject({
-      extensions: {
-        attempts: [
-          { provider: 'first', reason: 'timeout' },
-          { provider: 'second', reason: 'timeout' },
-        ],
-      },
+      result: 'providers_exhausted',
+      attempts: [
+        { provider: 'first', reason: 'timeout' },
+        { provider: 'second', reason: 'timeout' },
+      ],
     });
   });
 });

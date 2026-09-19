@@ -63,6 +63,11 @@ precisam ser exercidos pelo HTTP. Revisitar quando houver um caminho real que o 
 Não mocke `fetch` e não substitua a store de cache por uma falsa — os dois
 afirmariam implementação em vez de comportamento.
 
+Exceção explícita: em `test/cache.spec.ts`, `vi.spyOn` nos `get`/`set` do
+`CACHE_MANAGER` real, fazendo-os rejeitar. A store em memória nunca falha, e a
+consulta precisa sobreviver a uma store fora (Redis caído) sem virar `500`. A
+store continua real; só a falha é injetada.
+
 ## Ferramental de agente
 
 Esta seção é fiação local de skills. Os arquivos abaixo existem no disco mas

@@ -13,6 +13,10 @@ describe('configuration', () => {
     vi.stubEnv('REQUEST_BUDGET_MS', undefined);
     vi.stubEnv('CIRCUIT_FAILURE_THRESHOLD', undefined);
     vi.stubEnv('CIRCUIT_COOLDOWN_MS', undefined);
+    vi.stubEnv('CACHE_FRESH_MS', undefined);
+    vi.stubEnv('CACHE_EXPIRED_WINDOW_MS', undefined);
+    vi.stubEnv('CACHE_ABSENCE_TTL_MS', undefined);
+    vi.stubEnv('CACHE_MAX_ENTRIES', undefined);
 
     const { app } = await createApp();
     const res = await request(app.getHttpServer()).get('/cep/50680000');
@@ -28,6 +32,10 @@ describe('configuration', () => {
     vi.stubEnv('REQUEST_BUDGET_MS', 'test');
     vi.stubEnv('CIRCUIT_FAILURE_THRESHOLD', 'test');
     vi.stubEnv('CIRCUIT_COOLDOWN_MS', 'test');
+    vi.stubEnv('CACHE_FRESH_MS', 'test');
+    vi.stubEnv('CACHE_EXPIRED_WINDOW_MS', 'test');
+    vi.stubEnv('CACHE_ABSENCE_TTL_MS', 'test');
+    vi.stubEnv('CACHE_MAX_ENTRIES', 'test');
 
     await expect(createApp()).rejects.toMatchObject({
       issues: {
@@ -37,6 +45,10 @@ describe('configuration', () => {
         REQUEST_BUDGET_MS: expect.objectContaining({ value: 'test' }),
         CIRCUIT_FAILURE_THRESHOLD: expect.objectContaining({ value: 'test' }),
         CIRCUIT_COOLDOWN_MS: expect.objectContaining({ value: 'test' }),
+        CACHE_FRESH_MS: expect.objectContaining({ value: 'test' }),
+        CACHE_EXPIRED_WINDOW_MS: expect.objectContaining({ value: 'test' }),
+        CACHE_ABSENCE_TTL_MS: expect.objectContaining({ value: 'test' }),
+        CACHE_MAX_ENTRIES: expect.objectContaining({ value: 'test' }),
       },
     });
   });
@@ -48,4 +60,15 @@ describe('configuration', () => {
       issues: { PORT: expect.objectContaining({ value }) },
     });
   });
+  it.each(['86400000', '3600000'])(
+    'refuses an expiry window of %s ms, not longer than the 24h freshness',
+    async (value) => {
+      vi.stubEnv('CACHE_FRESH_MS', '86400000');
+      vi.stubEnv('CACHE_EXPIRED_WINDOW_MS', value);
+
+      await expect(createApp()).rejects.toMatchObject({
+        issues: { CACHE_EXPIRED_WINDOW_MS: expect.objectContaining({ value }) },
+      });
+    },
+  );
 });

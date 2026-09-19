@@ -6,5 +6,6 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['test/**/*.spec.ts'],
+    setupFiles: ['test/setup.ts'],
   },
 });

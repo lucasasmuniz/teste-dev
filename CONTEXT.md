@@ -44,7 +44,7 @@ _Avoid_: fonte, API externa, serviço, integração, vendor
 O que traduz um provider específico para a nossa língua: monta a consulta e
 converte a resposta dele em endereço canônico. É a única parte do sistema que
 sabe que aquele provider existe.
-_Em código_: `Adapter`
+_Em código_: `AddressLookup`, implementada por provider (`ViaCepLookup`)
 _Avoid_: client, gateway, wrapper, integração
 
 **Falha de provider**:

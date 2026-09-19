@@ -34,7 +34,7 @@ describe('request id', () => {
   });
 
   it('generates an id when there is no incoming header', async () => {
-    const res = await request(app.getHttpServer()).get('/cep/01310930');
+    const res = await request(app.getHttpServer()).get('/cep/50680000');
 
     const id = res.headers['request-id'];
     expect(id).toMatch(UUID);
@@ -45,7 +45,7 @@ describe('request id', () => {
 
   it('discards an incoming Request-Id outside the accepted format and generates a new one', async () => {
     const res = await request(app.getHttpServer())
-      .get('/cep/01310930')
+      .get('/cep/50680000')
       .set('Request-Id', 'x'.repeat(200));
 
     expect(res.headers['request-id']).toMatch(UUID);

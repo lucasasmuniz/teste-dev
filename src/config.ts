@@ -6,6 +6,7 @@ const configSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
+  PROVIDER_TIMEOUT_MS: z.coerce.number().int().positive().default(3000),
 });
 
 export const CONFIG = Symbol('CONFIG');

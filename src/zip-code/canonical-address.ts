@@ -1,9 +1,12 @@
-/** Every key is always present; `complement` is `null` when the provider has none. */
 export interface CanonicalAddress {
   zipCode: string;
-  street: string;
+  street: string | null;
   complement: string | null;
-  neighborhood: string;
+  neighborhood: string | null;
   city: string;
   state: string;
+}
+
+export function blankToNull(value: string): string | null {
+  return value === '' ? null : value;
 }

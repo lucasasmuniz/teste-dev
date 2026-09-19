@@ -34,9 +34,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 
 function classify(exception: unknown, req: Request): Outcome {
   if (exception instanceof Problem) {
-    const { type, title, status, detail } = exception;
+    const { type, title, status, detail, extensions } = exception;
     return {
-      problem: { type, title, status, detail },
+      problem: { ...extensions, type, title, status, detail },
       log: {
         fields: { problemType: type, status, detail, params: req.params },
         message:
@@ -75,6 +75,7 @@ interface ProblemDetails {
   title: string;
   status: number;
   detail?: string;
+  [extension: string]: unknown;
 }
 
 interface Outcome {

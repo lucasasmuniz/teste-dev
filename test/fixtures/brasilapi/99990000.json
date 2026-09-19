@@ -1,0 +1,12 @@
+{
+  "cep": "99990000",
+  "state": "RS",
+  "city": "Muliterno",
+  "neighborhood": "",
+  "street": "",
+  "service": "open-cep",
+  "ibge": {
+    "city": "4312625",
+    "state": "43"
+  }
+}

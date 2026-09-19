@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import type { AddressLookup, LookupResult } from './address-lookup.js';
+import {
+  FailureReason,
+  type AddressLookup,
+  type LookupResult,
+} from './address-lookup.js';
 import { blankToNull } from './canonical-address.js';
 import { fetchJson } from './fetch-json.js';
 
@@ -14,7 +17,6 @@ const responseSchema = z.object({
   uf: z.string().regex(/^[A-Z]{2}$/),
 });
 
-@Injectable()
 export class ViaCepLookup implements AddressLookup {
   readonly provider = 'viacep';
 
@@ -24,11 +26,11 @@ export class ViaCepLookup implements AddressLookup {
       return response;
     }
     if (response.status !== 200) {
-      return { ok: false, reason: 'http_error' };
+      return { ok: false, reason: FailureReason.HttpError };
     }
     const parsed = responseSchema.safeParse(response.body);
     if (!parsed.success) {
-      return { ok: false, reason: 'schema_invalid' };
+      return { ok: false, reason: FailureReason.SchemaInvalid };
     }
     const { logradouro, complemento, bairro, localidade, uf } = parsed.data;
     return {

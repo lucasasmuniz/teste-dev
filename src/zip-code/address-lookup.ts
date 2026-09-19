@@ -1,5 +1,6 @@
 import type { CanonicalAddress } from './canonical-address.js';
 
+export const ADDRESS_LOOKUPS = Symbol('ADDRESS_LOOKUPS');
 /**
  * The port every provider is reached through. **It never throws**: every
  * outcome comes back as a result, a promise the type cannot express.
@@ -20,5 +21,12 @@ export type LookupResult =
   | { ok: true; address: CanonicalAddress }
   | { ok: false; reason: FailureReason };
 
-export type FailureReason =
-  'timeout' | 'http_error' | 'schema_invalid' | 'not_found' | 'capped';
+export const FailureReason = {
+  Timeout: 'timeout',
+  HttpError: 'http_error',
+  SchemaInvalid: 'schema_invalid',
+  NotFound: 'not_found',
+  Capped: 'capped',
+} as const;
+
+export type FailureReason = (typeof FailureReason)[keyof typeof FailureReason];

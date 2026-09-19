@@ -7,6 +7,7 @@ const configSchema = z.object({
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
   PROVIDER_TIMEOUT_MS: z.coerce.number().int().positive().default(3000),
+  REQUEST_BUDGET_MS: z.coerce.number().int().positive().default(7000),
 });
 
 export const CONFIG = Symbol('CONFIG');

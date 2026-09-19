@@ -1,4 +1,4 @@
-import type { FailureReason } from './address-lookup.js';
+import { FailureReason } from './address-lookup.js';
 
 export async function fetchJson(
   url: string,
@@ -9,7 +9,10 @@ export async function fetchJson(
     const body = parseJson(await response.text());
     return { ok: true, status: response.status, body };
   } catch {
-    return { ok: false, reason: signal.aborted ? 'timeout' : 'http_error' };
+    return {
+      ok: false,
+      reason: signal.aborted ? FailureReason.Timeout : FailureReason.HttpError,
+    };
   }
 }
 
@@ -23,4 +26,7 @@ function parseJson(text: string): unknown {
 
 export type FetchJsonResult =
   | { ok: true; status: number; body: unknown }
-  | { ok: false; reason: Extract<FailureReason, 'timeout' | 'http_error'> };
+  | {
+      ok: false;
+      reason: typeof FailureReason.Timeout | typeof FailureReason.HttpError;
+    };

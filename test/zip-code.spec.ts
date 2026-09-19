@@ -2,7 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { http, HttpResponse } from 'msw';
 import request from 'supertest';
 import { createApp, type LogLine } from './app.js';
-import { providerStubs, VIACEP_URL } from './provider-stubs.js';
+import { BRASILAPI_URL, providerStubs, VIACEP_URL } from './provider-stubs.js';
 
 describe('GET /cep/:cep', () => {
   let app: INestApplication;
@@ -47,7 +47,7 @@ describe('GET /cep/:cep', () => {
     ]);
   });
 
-  it('treats a response outside the provider contract as a provider failure', async () => {
+  it('falls back invisibly when a provider answers outside its contract', async () => {
     providerStubs.use(
       http.get(VIACEP_URL, () =>
         HttpResponse.json({ cep: '50680-000', localidade: 42 }),
@@ -56,20 +56,19 @@ describe('GET /cep/:cep', () => {
 
     const res = await request(app.getHttpServer()).get('/cep/50680000');
 
-    expect(res.status).toBe(503);
-    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
-    expect(res.body).toEqual({
-      type: '/problems/providers-exhausted',
-      title: 'No provider could answer',
-      status: 503,
-      detail: 'No provider returned a usable answer for this zip code.',
-      instance: '/cep/50680000',
-    });
+    expect(res.status).toBe(200);
+    expect(res.headers['address-provider']).toBe('brasilapi');
+    expect(res.body.city).toBe('Recife');
     expect(attemptsOf(res.headers['request-id'])).toEqual([
       expect.objectContaining({
         level: 40,
         provider: 'viacep',
         result: 'schema_invalid',
+      }),
+      expect.objectContaining({
+        level: 30,
+        provider: 'brasilapi',
+        result: 'ok',
       }),
     ]);
   });
@@ -81,9 +80,134 @@ describe('GET /cep/:cep', () => {
 
     const res = await request(app.getHttpServer()).get('/cep/50680000');
 
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
     expect(attemptsOf(res.headers['request-id'])).toEqual([
-      expect.objectContaining({ result: 'schema_invalid' }),
+      expect.objectContaining({ provider: 'viacep', result: 'schema_invalid' }),
+      expect.objectContaining({ provider: 'brasilapi', result: 'ok' }),
+    ]);
+  });
+
+  it('falls back to the next provider when the first one fails, invisibly to the client', async () => {
+    providerStubs.use(
+      http.get(VIACEP_URL, () => new HttpResponse(null, { status: 500 })),
+    );
+
+    const res = await request(app.getHttpServer()).get('/cep/50680000');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['address-provider']).toBe('brasilapi');
+    expect(res.body).toEqual({
+      zipCode: '50680000',
+      street: 'Rua São Mateus',
+      complement: null,
+      neighborhood: 'Iputinga',
+      city: 'Recife',
+      state: 'PE',
+    });
+  });
+
+  it('alternates providers across requests, with the same output contract from both', async () => {
+    const first = await request(app.getHttpServer()).get('/cep/99990000');
+    const second = await request(app.getHttpServer()).get('/cep/99990000');
+
+    expect(first.headers['address-provider']).toBe('viacep');
+    expect(second.headers['address-provider']).toBe('brasilapi');
+    expect(second.body).toEqual(first.body);
+  });
+
+  it('gives a complete address the same shape whichever provider answered', async () => {
+    const fromViaCep = await request(app.getHttpServer()).get('/cep/50680000');
+    const fromBrasilApi = await request(app.getHttpServer()).get(
+      '/cep/50680000',
+    );
+
+    expect(fromBrasilApi.headers['address-provider']).toBe('brasilapi');
+    expect(Object.keys(fromBrasilApi.body)).toEqual(
+      Object.keys(fromViaCep.body),
+    );
+    expect(fromBrasilApi.body.complement).toBeNull();
+  });
+
+  it('exposes provider and attempt duration in Server-Timing', async () => {
+    const res = await request(app.getHttpServer()).get('/cep/50680000');
+
+    expect(res.headers['server-timing']).toMatch(
+      /^provider;desc="viacep";dur=\d+$/,
+    );
+  });
+
+  it('logs one summary per request with the providers tried in order', async () => {
+    providerStubs.use(
+      http.get(VIACEP_URL, () => new HttpResponse(null, { status: 500 })),
+    );
+
+    const res = await request(app.getHttpServer()).get('/cep/50680000');
+
+    expect(summariesOf(res.headers['request-id'])).toEqual([
+      expect.objectContaining({
+        level: 40,
+        zipCode: '50680000',
+        result: 'ok',
+        providers: ['viacep', 'brasilapi'],
+        durationMs: expect.any(Number),
+      }),
+    ]);
+  });
+
+  it('logs the summary as info when the first provider answers', async () => {
+    const res = await request(app.getHttpServer()).get('/cep/50680000');
+
+    expect(summariesOf(res.headers['request-id'])).toEqual([
+      expect.objectContaining({
+        level: 30,
+        result: 'ok',
+        providers: ['viacep'],
+      }),
+    ]);
+  });
+
+  it('responds 503 detailing each provider when all of them fail', async () => {
+    providerStubs.use(
+      http.get(VIACEP_URL, () => new HttpResponse(null, { status: 500 })),
+      http.get(BRASILAPI_URL, () => HttpResponse.json({ cep: 50680000 })),
+    );
+
+    const res = await request(app.getHttpServer()).get('/cep/50680000');
+
+    expect(res.status).toBe(503);
+    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+    expect(res.headers['address-provider']).toBeUndefined();
+    expect(res.body).toEqual({
+      type: '/problems/providers-exhausted',
+      title: 'No provider could answer',
+      status: 503,
+      detail: 'No provider returned a usable answer for this zip code.',
+      attempts: [
+        { provider: 'viacep', reason: 'http_error' },
+        { provider: 'brasilapi', reason: 'schema_invalid' },
+      ],
+      instance: '/cep/50680000',
+    });
+    expect(summariesOf(res.headers['request-id'])).toEqual([
+      expect.objectContaining({
+        level: 40,
+        result: 'providers_exhausted',
+        providers: ['viacep', 'brasilapi'],
+      }),
+    ]);
+  });
+
+  it('treats a BrasilAPI 404 as an http_error for now', async () => {
+    providerStubs.use(
+      http.get(VIACEP_URL, () => new HttpResponse(null, { status: 500 })),
+    );
+
+    const res = await request(app.getHttpServer()).get('/cep/00000001');
+
+    expect(res.status).toBe(503);
+    expect(res.body.attempts).toEqual([
+      { provider: 'viacep', reason: 'http_error' },
+      { provider: 'brasilapi', reason: 'http_error' },
     ]);
   });
 
@@ -156,6 +280,12 @@ describe('GET /cep/:cep', () => {
   function attemptsOf(requestId: string) {
     return logs.filter(
       (l) => l.requestId === requestId && l.msg === 'provider attempt',
+    );
+  }
+
+  function summariesOf(requestId: string) {
+    return logs.filter(
+      (l) => l.requestId === requestId && l.msg === 'lookup summary',
     );
   }
 });

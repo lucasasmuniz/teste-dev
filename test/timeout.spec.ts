@@ -33,7 +33,8 @@ describe('provider timeout', () => {
 
     const res = await request(app.getHttpServer()).get('/cep/50680000');
 
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
+    expect(res.headers['address-provider']).toBe('brasilapi');
     expect(signal?.aborted).toBe(true);
     expect(logs).toContainEqual(
       expect.objectContaining({

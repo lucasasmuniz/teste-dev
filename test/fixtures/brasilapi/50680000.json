@@ -1,0 +1,12 @@
+{
+  "cep": "50680000",
+  "state": "PE",
+  "city": "Recife",
+  "neighborhood": "Iputinga",
+  "street": "Rua São Mateus",
+  "service": "open-cep",
+  "ibge": {
+    "city": "2611606",
+    "state": "26"
+  }
+}

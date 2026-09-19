@@ -10,6 +10,7 @@ describe('configuration', () => {
     vi.stubEnv('PORT', undefined);
     vi.stubEnv('LOG_LEVEL', undefined);
     vi.stubEnv('PROVIDER_TIMEOUT_MS', undefined);
+    vi.stubEnv('REQUEST_BUDGET_MS', undefined);
 
     const { app } = await createApp();
     const res = await request(app.getHttpServer()).get('/cep/50680000');
@@ -22,12 +23,14 @@ describe('configuration', () => {
     vi.stubEnv('PORT', 'test');
     vi.stubEnv('LOG_LEVEL', 'test');
     vi.stubEnv('PROVIDER_TIMEOUT_MS', 'test');
+    vi.stubEnv('REQUEST_BUDGET_MS', 'test');
 
     await expect(createApp()).rejects.toMatchObject({
       issues: {
         PORT: expect.objectContaining({ value: 'test' }),
         LOG_LEVEL: expect.objectContaining({ value: 'test' }),
         PROVIDER_TIMEOUT_MS: expect.objectContaining({ value: 'test' }),
+        REQUEST_BUDGET_MS: expect.objectContaining({ value: 'test' }),
       },
     });
   });

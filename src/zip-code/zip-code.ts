@@ -1,6 +1,6 @@
 import { Param, StandardSchemaValidationPipe } from '@nestjs/common';
 import { z } from 'zod';
-import { MalformedZipCode } from '../problems.js';
+import { MalformedZipCode } from './problems.js';
 
 const ACCEPTED_FORMATS = [
   /^\d{8}$/, // 01310930

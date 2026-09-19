@@ -8,6 +8,10 @@ import { Test } from '@nestjs/testing';
 import { Writable } from 'node:stream';
 import { AppModule } from '../src/app.module.js';
 import { LOG_DESTINATION } from '../src/observability.js';
+import {
+  ADDRESS_LOOKUPS,
+  type AddressLookup,
+} from '../src/zip-code/address-lookup.js';
 
 // nestjs-pino keeps one pino-http per process, bound to the first app's
 // destination, so every app shares this one.
@@ -34,16 +38,20 @@ export class ExplodeController {
 
 export async function createApp({
   controllers = [],
-}: { controllers?: Type[] } = {}) {
+  lookups,
+}: { controllers?: Type[]; lookups?: AddressLookup[] } = {}) {
   logs.length = 0;
 
-  const moduleRef = await Test.createTestingModule({
+  const builder = Test.createTestingModule({
     imports: [AppModule],
     controllers,
   })
     .overrideProvider(LOG_DESTINATION)
-    .useValue(destination)
-    .compile();
+    .useValue(destination);
+  if (lookups) {
+    builder.overrideProvider(ADDRESS_LOOKUPS).useValue(lookups);
+  }
+  const moduleRef = await builder.compile();
 
   const app = moduleRef.createNestApplication();
   await app.init();

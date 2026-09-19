@@ -54,6 +54,13 @@ export class CircuitBreakers {
     return breaker;
   }
 
+  states(): ProviderCircuit[] {
+    return [...this.byProvider].map(([provider, breaker]) => ({
+      provider,
+      state: breaker.state,
+    }));
+  }
+
   private report(change: StateChange) {
     this.logger[change.to === CircuitState.Open ? 'warn' : 'info'](
       change,
@@ -75,14 +82,11 @@ export class CircuitBreaker {
   ) {}
 
   get state(): CircuitState {
-    return this.current;
+    return this.cooledDown() ? CircuitState.HalfOpen : this.current;
   }
 
   tryAcquire(): Permit | null {
-    if (
-      this.current === CircuitState.Open &&
-      performance.now() - this.openedAt >= this.policy.cooldownMs
-    ) {
+    if (this.cooledDown()) {
       this.moveTo(CircuitState.HalfOpen);
     }
     if (this.current === CircuitState.Closed) {
@@ -115,6 +119,13 @@ export class CircuitBreaker {
     }
   }
 
+  private cooledDown(): boolean {
+    return (
+      this.current === CircuitState.Open &&
+      performance.now() - this.openedAt >= this.policy.cooldownMs
+    );
+  }
+
   private moveTo(next: CircuitState) {
     const previous = this.current;
     this.current = next;
@@ -127,6 +138,11 @@ export class CircuitBreaker {
 interface CircuitPolicy {
   failureThreshold: number;
   cooldownMs: number;
+}
+
+interface ProviderCircuit {
+  provider: string;
+  state: CircuitState;
 }
 
 interface StateChange {

@@ -1,14 +1,18 @@
 import type { INestApplication } from '@nestjs/common';
 import { http, HttpResponse } from 'msw';
 import newrelic from 'newrelic';
-import request from 'supertest';
 import type {
   AddressLookup,
-  FailureReason,
   LookupResult,
 } from '../src/zip-code/address-lookup.js';
 import { AddressResolver } from '../src/zip-code/address-resolver.js';
-import { createApp, type LogLine } from './app.js';
+import {
+  createApp,
+  getDistinct,
+  getDistinctTimes,
+  type LogLine,
+} from './app.js';
+import { failWith, FakeLookup, found, succeed } from './fake-lookups.js';
 import viaCep50680000 from './fixtures/viacep/50680000.json' with { type: 'json' };
 import {
   anyZipCode,
@@ -17,25 +21,10 @@ import {
   VIACEP_URL,
 } from './provider-stubs.js';
 
-class FakeLookup implements AddressLookup {
-  calls = 0;
-
-  constructor(
-    readonly provider: string,
-    public respond: (signal: AbortSignal) => Promise<LookupResult>,
-  ) {}
-
-  lookup(_zipCode: string, signal: AbortSignal): Promise<LookupResult> {
-    this.calls++;
-    return this.respond(signal);
-  }
-}
-
 describe('circuit breaker', () => {
   let app: INestApplication;
   let logs: LogLine[];
   let calls: Record<string, number>;
-  let nextZipCode = 10_000_000;
 
   beforeEach(async () => {
     ({ app, logs } = await createApp());
@@ -46,27 +35,11 @@ describe('circuit breaker', () => {
     await app.close();
   });
 
-  function get(zipCode: string) {
-    return request(app.getHttpServer()).get(`/cep/${zipCode}`);
-  }
-
-  // A cached answer never reaches the provider, so a sweep of distinct zip
-  // codes is what keeps the circuit under load.
-  async function getDistinctTimes(times: number) {
-    for (let i = 0; i < times; i++) {
-      await getDistinct();
-    }
-  }
-
-  function getDistinct() {
-    return get(String(nextZipCode++));
-  }
-
   it('never opens on repeated absence: it measures provider health, not whether data exists', async () => {
     providerStubs.use(anyZipCode.viaCepDenies, anyZipCode.brasilApiDenies);
-    await getDistinctTimes(10);
+    await getDistinctTimes(app, 10);
 
-    const res = await getDistinct();
+    const res = await getDistinct(app);
 
     expect(calls).toEqual({ viacep: 11, brasilapi: 11 });
     expect(res.status).toBe(404);
@@ -78,9 +51,9 @@ describe('circuit breaker', () => {
       http.get(VIACEP_URL, () => new HttpResponse(null, { status: 500 })),
       anyZipCode.brasilApiAnswers,
     );
-    await getDistinctTimes(10);
+    await getDistinctTimes(app, 10);
 
-    const res = await getDistinct();
+    const res = await getDistinct(app);
 
     expect(res.status).toBe(200);
     expect(calls.viacep).toBe(5);
@@ -111,9 +84,9 @@ describe('circuit breaker', () => {
       http.get(VIACEP_URL, () => new HttpResponse(null, { status: 500 })),
       anyZipCode.brasilApiDenies,
     );
-    await getDistinctTimes(5);
+    await getDistinctTimes(app, 5);
 
-    const res = await getDistinct();
+    const res = await getDistinct(app);
 
     expect(calls.viacep).toBe(5);
     expect(res.status).toBe(404);
@@ -143,7 +116,7 @@ describe('circuit breaker', () => {
         anyZipCode.brasilApiDenies,
       );
 
-      await getDistinctTimes(10);
+      await getDistinctTimes(app, 10);
 
       expect(calls.viacep).toBe(10);
     },
@@ -197,7 +170,7 @@ describe('circuit breaker, on the clock', () => {
       attempts: [{ provider: 'recovering', reason: 'circuit_open' }],
     });
 
-    answerProbe(await succeed());
+    answerProbe(found('50680000'));
     await expect(probing).resolves.toMatchObject({ provider: 'recovering' });
     recovering.respond = succeed;
     await resolveTimes(2);
@@ -242,7 +215,7 @@ describe('circuit breaker, on the clock', () => {
     provider.respond = failWith('http_error');
     await resolveTimes(5);
 
-    late.answer(await succeed());
+    late.answer(found('50680000'));
     await lateRequest;
     await resolve();
 
@@ -262,7 +235,7 @@ describe('circuit breaker, on the clock', () => {
     answerLater(provider);
     void resolve();
 
-    late.answer(await succeed());
+    late.answer(found('50680000'));
     await lateRequest;
     await resolve();
 
@@ -411,24 +384,6 @@ describe('circuit breaker, on the clock', () => {
     );
   });
 });
-
-async function succeed(): Promise<LookupResult> {
-  return {
-    ok: true,
-    address: {
-      zipCode: '50680000',
-      street: null,
-      complement: null,
-      neighborhood: null,
-      city: 'Recife',
-      state: 'PE',
-    },
-  };
-}
-
-function failWith(reason: FailureReason) {
-  return async (): Promise<LookupResult> => ({ ok: false, reason });
-}
 
 function answerLater(lookup: FakeLookup) {
   const pending = { answer: (_result: LookupResult) => {} };

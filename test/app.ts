@@ -2,10 +2,12 @@ import {
   Controller,
   Get,
   ServiceUnavailableException,
+  type INestApplication,
   type Type,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Writable } from 'node:stream';
+import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { LOG_DESTINATION } from '../src/observability.js';
 import {
@@ -58,6 +60,18 @@ export async function createApp({
   return { app, logs };
 }
 
+// A cached answer never reaches the provider, so a sweep of distinct zip codes
+// is what keeps a circuit under load.
+export function getDistinct(app: INestApplication) {
+  return request(app.getHttpServer()).get(`/cep/${nextZipCode++}`);
+}
+
+export async function getDistinctTimes(app: INestApplication, times: number) {
+  for (let i = 0; i < times; i++) {
+    await getDistinct(app);
+  }
+}
+
 export interface LogLine {
   level: number;
   msg: string;
@@ -65,3 +79,5 @@ export interface LogLine {
   err?: { stack?: string };
   [field: string]: unknown;
 }
+
+let nextZipCode = 10_000_000;

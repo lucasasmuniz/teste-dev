@@ -9,6 +9,7 @@ import {
   type Resolution,
 } from '../src/zip-code/address-resolver.js';
 import { createApp, type LogLine } from './app.js';
+import { FakeLookup, found, succeed } from './fake-lookups.js';
 import { countProviderCalls } from './provider-stubs.js';
 
 class ControlledLookup implements AddressLookup {
@@ -28,14 +29,6 @@ class ControlledLookup implements AddressLookup {
     for (const answer of this.pending.splice(0)) {
       answer(found('50680000'));
     }
-  }
-}
-
-class HealthyLookup implements AddressLookup {
-  readonly provider = 'healthy';
-
-  async lookup(zipCode: string): Promise<LookupResult> {
-    return found(zipCode);
   }
 }
 
@@ -101,7 +94,7 @@ describe('provider concurrency cap', () => {
     vi.stubEnv('CIRCUIT_FAILURE_THRESHOLD', '2');
     const busy = new ControlledLookup('busy');
     ({ app, logs } = await createApp({
-      lookups: [busy, new HealthyLookup()],
+      lookups: [busy, new FakeLookup('healthy', succeed)],
     }));
     const holding = resolve();
 
@@ -148,7 +141,7 @@ describe('provider concurrency cap', () => {
     vi.stubEnv('PROVIDER_TIMEOUT_MS', '3000');
     const hanging = new ControlledLookup('hanging');
     ({ app, logs } = await createApp({
-      lookups: [hanging, new HealthyLookup()],
+      lookups: [hanging, new FakeLookup('healthy', succeed)],
     }));
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
 
@@ -163,17 +156,3 @@ describe('provider concurrency cap', () => {
     expect(hanging.calls).toBe(2);
   });
 });
-
-function found(zipCode: string): LookupResult {
-  return {
-    ok: true,
-    address: {
-      zipCode,
-      street: null,
-      complement: null,
-      neighborhood: null,
-      city: 'Recife',
-      state: 'PE',
-    },
-  };
-}

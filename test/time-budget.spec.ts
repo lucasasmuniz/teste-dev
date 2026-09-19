@@ -5,6 +5,7 @@ import type {
 } from '../src/zip-code/address-lookup.js';
 import { AddressResolver } from '../src/zip-code/address-resolver.js';
 import { createApp } from './app.js';
+import { FakeLookup, succeed } from './fake-lookups.js';
 
 class HangingLookup implements AddressLookup {
   startedAt?: number;
@@ -21,24 +22,6 @@ class HangingLookup implements AddressLookup {
   }
 }
 
-class HealthyLookup implements AddressLookup {
-  readonly provider = 'healthy';
-
-  async lookup(zipCode: string): Promise<LookupResult> {
-    return {
-      ok: true,
-      address: {
-        zipCode,
-        street: null,
-        complement: null,
-        neighborhood: null,
-        city: 'Muliterno',
-        state: 'RS',
-      },
-    };
-  }
-}
-
 describe('request time budget', () => {
   let app: INestApplication;
 
@@ -51,7 +34,9 @@ describe('request time budget', () => {
   it('cuts a provider that ignores the abort signal when its attempt times out', async () => {
     vi.stubEnv('PROVIDER_TIMEOUT_MS', '3000');
     const hanging = new HangingLookup('hanging');
-    ({ app } = await createApp({ lookups: [hanging, new HealthyLookup()] }));
+    ({ app } = await createApp({
+      lookups: [hanging, new FakeLookup('healthy', succeed)],
+    }));
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
 
     const resolution = app.get(AddressResolver).resolve('99990000');

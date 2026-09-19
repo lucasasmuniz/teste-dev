@@ -7,6 +7,7 @@ import { ADDRESS_LOOKUPS } from './address-lookup.js';
 import { AddressResolver } from './address-resolver.js';
 import { BrasilApiLookup } from './brasilapi.lookup.js';
 import { CircuitBreakers } from './circuit-breakers.js';
+import { HealthController } from './health.controller.js';
 import { ViaCepLookup } from './viacep.lookup.js';
 import { ZipCodeController } from './zip-code.controller.js';
 import { ZipCodeLookup } from './zip-code-lookup.js';
@@ -20,7 +21,7 @@ import { ZipCodeLookup } from './zip-code-lookup.js';
       }),
     }),
   ],
-  controllers: [ZipCodeController],
+  controllers: [ZipCodeController, HealthController],
   providers: [
     AddressCache,
     AddressResolver,

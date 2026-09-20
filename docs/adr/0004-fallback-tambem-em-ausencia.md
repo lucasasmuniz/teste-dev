@@ -55,6 +55,13 @@ sistema de resiliência.
   `CepPromiseError`/`service_error`. Um `404` em HTML de rota inexistente é
   falha de provider — sem isso, uma mudança de rota do provider se disfarçaria
   de ausência e nunca abriria o circuito.
+- **A negativa do ViaCEP alterna de formato.** Documentada como `erro: true`
+  (booleano), ela costuma vir como a string `"true"`, mas o mesmo CEP
+  (`78300000`, 19 de setembro de 2026) devolveu o booleano numa resposta e a
+  string na seguinte. Os dois formatos são lidos como ausência: se só um
+  fosse, a outra metade viraria `schema_invalid`, uma falha de provider, e
+  uma varredura de CEPs inexistentes abriria o circuito de um provider
+  saudável — a invariante central ferida por um detalhe de formato.
 - **As falhas dos dois providers não são independentes.** O BrasilAPI consulta
   o ViaCEP por dentro, então os dois podem cair juntos. Não muda o desenho, mas
   enfraquece a hipótese de que dois providers dão redundância real.

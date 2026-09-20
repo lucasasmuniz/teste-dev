@@ -108,7 +108,7 @@ export class NovoProviderLookup implements AddressLookup {
     }
     const parsed = responseSchema.safeParse(response.body);
     if (!parsed.success) {
-      return { ok: false, reason: FailureReason.SchemaInvalid };
+      return outsideContract(response.raw);
     }
     return toCanonicalAddress({ zipCode, ...traduzido(parsed.data) });
   }
@@ -170,7 +170,8 @@ Qualquer requisição pode ser reconstruída a partir do log:
   Herdado do header `Request-Id` de entrada quando existe, devolvido na
   resposta.
 - **Uma linha por tentativa de provider**: provider, resultado, duração, estado
-  do circuito e número da tentativa.
+  do circuito e número da tentativa. Quando o provider responde fora do
+  contrato, a linha carrega a evidência em `detail`.
 - **Uma linha de resumo por requisição**: resultado, providers tentados em
   ordem, origem (provider, cache fresco ou vencido) e latência total.
 - **Níveis com significado.** `warn` é degradado mas recuperado; `error` só
@@ -204,8 +205,12 @@ por provider e resultado, onde aparece a fatia `viacep, schema_invalid` abaixo._
 
 <img width="1276" height="659" alt="Logs de uma requisição filtrados pelo requestId" src="https://github.com/user-attachments/assets/de21d1e2-9ea7-445f-a1fb-c2d03345fa7d" />
 
-_Uma requisição inteira pelo `requestId`: a tentativa que falhou em `warn`, a
-que respondeu em `info` e o resumo._
+_Uma requisição inteira pelo `requestId`. Foi assim que apareceu um caso real:
+o ViaCEP documenta a negativa como `erro: true`, costuma responder a string
+`"true"`, e para `78300000` alternou entre os dois formatos em respostas
+seguidas. O `detail` da linha em `warn` mostrou o corpo; hoje os dois formatos
+são lidos como ausência. Se só um fosse, a outra metade contaria como falha e
+abriria o circuito de um provider saudável._
 
 ## 4. Tratamento de erros
 
@@ -257,6 +262,8 @@ exigiria uma fonte de verdade sobre o CEP que não temos:
 - **O `404` do BrasilAPI não distingue negativa de pane interna**: é o mesmo
   `service_error` quando todas as fontes negam e quando todas estão fora. Uma
   ausência confirmada pode ser falsa; o dano fica limitado pelo TTL de 1 h.
+- **A negativa do ViaCEP alterna de formato** (`erro: true` e `"true"`), como
+  mostrado no print dos logs.
 - **O BrasilAPI consulta o ViaCEP por dentro**, então a redundância real é
   menor do que dois providers sugerem.
 

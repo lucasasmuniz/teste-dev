@@ -6,7 +6,7 @@ import {
   type LookupResult,
 } from '../address-lookup.js';
 import { blankToNull } from '../canonical-address.js';
-import { fetchJson } from './fetch-json.js';
+import { fetchJson, outsideContract } from './fetch-json.js';
 
 const BASE_URL = 'https://brasilapi.com.br/api/cep/v1';
 
@@ -45,7 +45,7 @@ export class BrasilApiLookup implements AddressLookup {
     }
     const parsed = responseSchema.safeParse(response.body);
     if (!parsed.success) {
-      return { ok: false, reason: FailureReason.SchemaInvalid };
+      return outsideContract(response.raw);
     }
     const { street, neighborhood, city, state } = parsed.data;
     return toCanonicalAddress({

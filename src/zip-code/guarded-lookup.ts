@@ -109,6 +109,7 @@ export class GuardedLookup {
           zipCode,
           attempt: attemptNumber,
           result: result.ok ? 'ok' : result.reason,
+          ...(!result.ok && result.detail && { detail: result.detail }),
           durationMs,
           circuit,
         },

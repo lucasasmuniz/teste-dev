@@ -26,12 +26,19 @@ export function toCanonicalAddress(fields: CanonicalAddress): LookupResult {
   if (parsed.success) {
     return { ok: true, address: parsed.data };
   }
-  return { ok: false, reason: FailureReason.SchemaInvalid };
+  return {
+    ok: false,
+    reason: FailureReason.SchemaInvalid,
+    detail: parsed.error.issues
+      .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+      .join('; '),
+  };
 }
 
+/** `detail` is evidence for the log, never for the client. */
 export type LookupResult =
   | { ok: true; address: CanonicalAddress }
-  | { ok: false; reason: FailureReason };
+  | { ok: false; reason: FailureReason; detail?: string };
 
 export const FailureReason = {
   Timeout: 'timeout',

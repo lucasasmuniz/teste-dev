@@ -71,6 +71,7 @@ describe('GET /cep/:cep', () => {
         level: 40,
         provider: 'viacep',
         result: 'schema_invalid',
+        detail: expect.stringContaining('"localidade":42'),
       }),
       expect.objectContaining({
         level: 30,
@@ -89,7 +90,11 @@ describe('GET /cep/:cep', () => {
 
     expect(res.status).toBe(200);
     expect(attemptsOf(res.headers['request-id'])).toEqual([
-      expect.objectContaining({ provider: 'viacep', result: 'schema_invalid' }),
+      expect.objectContaining({
+        provider: 'viacep',
+        result: 'schema_invalid',
+        detail: '<html>maintenance</html>',
+      }),
       expect.objectContaining({ provider: 'brasilapi', result: 'ok' }),
     ]);
   });
@@ -121,6 +126,13 @@ describe('GET /cep/:cep', () => {
         provider,
         reason: 'schema_invalid',
       });
+      expect(attemptsOf(res.headers['request-id'])).toContainEqual(
+        expect.objectContaining({
+          provider,
+          result: 'schema_invalid',
+          detail: expect.stringContaining('state'),
+        }),
+      );
     },
   );
 
@@ -345,20 +357,35 @@ describe('GET /cep/:cep', () => {
     ]);
   });
 
-  it('reads a ViaCEP erro that is not the string "true" as outside its contract', async () => {
+  it('reads a ViaCEP erro as the boolean true as absence, like the string', async () => {
     providerStubs.use(
       http.get(VIACEP_URL, () => HttpResponse.json({ erro: true })),
-      http.get(BRASILAPI_URL, () => new HttpResponse(null, { status: 500 })),
+      anyZipCode.brasilApiDenies,
     );
 
     const res = await request(app.getHttpServer()).get('/cep/50680000');
 
-    expect(res.status).toBe(503);
-    expect(res.body.attempts).toEqual([
-      { provider: 'viacep', reason: 'schema_invalid' },
-      { provider: 'brasilapi', reason: 'http_error' },
-    ]);
+    expect(res.status).toBe(404);
+    expect(res.body.type).toBe('/problems/confirmed-absence');
   });
+
+  it.each([{ erro: 'false' }, { erro: 1 }, { erro: 'yes' }])(
+    'reads a ViaCEP erro of %o as outside its contract',
+    async (body) => {
+      providerStubs.use(
+        http.get(VIACEP_URL, () => HttpResponse.json(body)),
+        http.get(BRASILAPI_URL, () => new HttpResponse(null, { status: 500 })),
+      );
+
+      const res = await request(app.getHttpServer()).get('/cep/50680000');
+
+      expect(res.status).toBe(503);
+      expect(res.body.attempts).toEqual([
+        { provider: 'viacep', reason: 'schema_invalid' },
+        { provider: 'brasilapi', reason: 'http_error' },
+      ]);
+    },
+  );
 
   it('treats a BrasilAPI 404 that is not a CepPromiseError service_error as a provider failure', async () => {
     providerStubs.use(

@@ -6,12 +6,13 @@ import {
   type LookupResult,
 } from '../address-lookup.js';
 import { blankToNull } from '../canonical-address.js';
-import { fetchJson } from './fetch-json.js';
+import { fetchJson, outsideContract } from './fetch-json.js';
 
 const BASE_URL = 'https://viacep.com.br/ws';
 
-// ViaCEP denies with 200 and `erro` as the string "true", not a boolean.
-const notFoundSchema = z.object({ erro: z.literal('true') });
+// ViaCEP denies with 200 and `erro` documented as a boolean, usually sent as
+// the string "true" and sometimes as the boolean; both are absence.
+const notFoundSchema = z.object({ erro: z.literal(['true', true]) });
 
 const responseSchema = z.object({
   logradouro: z.string(),
@@ -37,7 +38,7 @@ export class ViaCepLookup implements AddressLookup {
     }
     const parsed = responseSchema.safeParse(response.body);
     if (!parsed.success) {
-      return { ok: false, reason: FailureReason.SchemaInvalid };
+      return outsideContract(response.raw);
     }
     const { logradouro, complemento, bairro, localidade, uf } = parsed.data;
     return toCanonicalAddress({

@@ -1,4 +1,4 @@
-import { FailureReason } from './address-lookup.js';
+import { FailureReason } from '../address-lookup.js';
 
 export async function fetchJson(
   url: string,

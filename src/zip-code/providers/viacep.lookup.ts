@@ -3,8 +3,8 @@ import {
   FailureReason,
   type AddressLookup,
   type LookupResult,
-} from './address-lookup.js';
-import { blankToNull } from './canonical-address.js';
+} from '../address-lookup.js';
+import { blankToNull } from '../canonical-address.js';
 import { fetchJson } from './fetch-json.js';
 
 const BASE_URL = 'https://viacep.com.br/ws';

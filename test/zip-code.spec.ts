@@ -2,7 +2,14 @@ import type { INestApplication } from '@nestjs/common';
 import { http, HttpResponse } from 'msw';
 import request from 'supertest';
 import { createApp, type LogLine } from './app.js';
-import { BRASILAPI_URL, providerStubs, VIACEP_URL } from './provider-stubs.js';
+import brasilApi50680000 from './fixtures/brasilapi/50680000.json' with { type: 'json' };
+import viaCep50680000 from './fixtures/viacep/50680000.json' with { type: 'json' };
+import {
+  anyZipCode,
+  BRASILAPI_URL,
+  providerStubs,
+  VIACEP_URL,
+} from './provider-stubs.js';
 
 describe('GET /cep/:cep', () => {
   let app: INestApplication;
@@ -86,6 +93,36 @@ describe('GET /cep/:cep', () => {
       expect.objectContaining({ provider: 'brasilapi', result: 'ok' }),
     ]);
   });
+
+  it.each([
+    {
+      provider: 'viacep',
+      stub: http.get(VIACEP_URL, () =>
+        HttpResponse.json({ ...viaCep50680000, uf: 'Pernambuco' }),
+      ),
+      siblingDenies: anyZipCode.brasilApiDenies,
+    },
+    {
+      provider: 'brasilapi',
+      stub: http.get(BRASILAPI_URL, () =>
+        HttpResponse.json({ ...brasilApi50680000, state: 'pe' }),
+      ),
+      siblingDenies: anyZipCode.viaCepDenies,
+    },
+  ])(
+    'treats a $provider address outside the canonical format as outside its contract',
+    async ({ provider, stub, siblingDenies }) => {
+      providerStubs.use(stub, siblingDenies);
+
+      const res = await request(app.getHttpServer()).get('/cep/50680000');
+
+      expect(res.status).toBe(404);
+      expect(res.body.attempts).toContainEqual({
+        provider,
+        reason: 'schema_invalid',
+      });
+    },
+  );
 
   it('falls back to the next provider when the first one fails, invisibly to the client', async () => {
     providerStubs.use(

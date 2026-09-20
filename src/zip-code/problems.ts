@@ -1,5 +1,6 @@
-import { Problem } from '../problems.js';
-import type { FailureReason } from './address-lookup.js';
+import { z } from 'zod';
+import { Problem, problemDetails } from '../problems.js';
+import { FailureReason } from './address-lookup.js';
 
 export class MalformedZipCode extends Problem {
   readonly type = '/problems/malformed-zip-code';
@@ -46,7 +47,13 @@ export class PartialAbsence extends Problem {
   }
 }
 
-export interface Attempt {
-  provider: string;
-  reason: FailureReason;
-}
+export type Attempt = z.infer<typeof attempt>;
+
+const attempt = z.object({
+  provider: z.string(),
+  reason: z.enum(Object.values(FailureReason)),
+});
+
+export const providerProblemDetails = problemDetails
+  .extend({ attempts: z.array(attempt) })
+  .meta({ id: 'ProviderProblemDetails' });

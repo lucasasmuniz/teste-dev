@@ -1,7 +1,8 @@
 import { Controller, Get, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import type { CanonicalAddress } from './canonical-address.js';
+import type { CanonicalAddress, ExpiredAddress } from './canonical-address.js';
 import { Source, ZipCodeLookup, type Answer } from './zip-code-lookup.js';
+import { ApiZipCodeLookup } from './zip-code.openapi.js';
 import { ZipCodeParam } from './zip-code.js';
 
 @Controller('cep')
@@ -9,6 +10,7 @@ export class ZipCodeController {
   constructor(private readonly zipCodeLookup: ZipCodeLookup) {}
 
   @Get(':cep')
+  @ApiZipCodeLookup()
   async lookup(
     @ZipCodeParam() zipCode: string,
     @Res({ passthrough: true }) res: Response,
@@ -50,10 +52,6 @@ function present(answer: Answer): Presentation {
         },
       };
   }
-}
-
-interface ExpiredAddress extends CanonicalAddress {
-  freshness: { status: 'expired'; storedAt: string };
 }
 
 interface Presentation {

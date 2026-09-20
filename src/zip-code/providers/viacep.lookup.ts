@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   FailureReason,
+  toCanonicalAddress,
   type AddressLookup,
   type LookupResult,
 } from '../address-lookup.js';
@@ -16,8 +17,8 @@ const responseSchema = z.object({
   logradouro: z.string(),
   complemento: z.string(),
   bairro: z.string(),
-  localidade: z.string().min(1),
-  uf: z.string().regex(/^[A-Z]{2}$/),
+  localidade: z.string(),
+  uf: z.string(),
 });
 
 export class ViaCepLookup implements AddressLookup {
@@ -39,16 +40,13 @@ export class ViaCepLookup implements AddressLookup {
       return { ok: false, reason: FailureReason.SchemaInvalid };
     }
     const { logradouro, complemento, bairro, localidade, uf } = parsed.data;
-    return {
-      ok: true,
-      address: {
-        zipCode,
-        street: blankToNull(logradouro),
-        complement: blankToNull(complemento),
-        neighborhood: blankToNull(bairro),
-        city: localidade,
-        state: uf,
-      },
-    };
+    return toCanonicalAddress({
+      zipCode,
+      street: blankToNull(logradouro),
+      complement: blankToNull(complemento),
+      neighborhood: blankToNull(bairro),
+      city: localidade,
+      state: uf,
+    });
   }
 }

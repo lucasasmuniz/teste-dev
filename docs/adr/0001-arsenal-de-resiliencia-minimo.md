@@ -6,7 +6,7 @@ backoff** foi cortado: gastar tentativas no provider ruim antes de tentar o
 irmão saudável piora a latência do caminho degradado — retry serve a quem não
 tem alternativa, e nós temos. **Fila (BullMQ) e rate limiting de saída via
 Redis** foram cortados junto com o próprio Redis: pré-aquecer cache de CEP não
-resolve nenhum problema que o cache sob demanda já não resolva, e o README diz
+resolve nenhum problema que o cache sob demanda já não resolva, e o enunciado diz
 explicitamente que banco não é avaliado. O **circuit breaker** ficou porque é o
 único que remove o imposto de latência de um provider morto ser escolhido pelo
 round-robin a cada duas requisições. O **cache** ficou porque é a única coisa

@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { PinoLogger } from 'nestjs-pino';
 import { STATUS_CODES } from 'node:http';
 import { severityFor } from './observability.js';
-import { Problem } from './problems.js';
+import { detailsOf, INTERNAL_ERROR, Problem } from './problems.js';
 
 @Catch()
 export class ProblemDetailsFilter implements ExceptionFilter {
@@ -35,9 +35,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 
 function classify(exception: unknown, req: Request): Outcome {
   if (exception instanceof Problem) {
-    const { type, title, status, detail, extensions, headers } = exception;
+    const { type, status, detail, headers } = exception;
     return {
-      problem: { ...extensions, type, title, status, detail },
+      problem: detailsOf(exception),
       headers,
       log: {
         fields: { problemType: type, status, detail, params: req.params },
@@ -63,11 +63,7 @@ function classify(exception: unknown, req: Request): Outcome {
     };
   }
   return {
-    problem: {
-      type: '/problems/internal-error',
-      title: 'Internal error',
-      status: 500,
-    },
+    problem: INTERNAL_ERROR,
     log: { fields: { err: exception }, message: 'unexpected error' },
   };
 }

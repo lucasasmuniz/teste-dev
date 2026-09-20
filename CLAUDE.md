@@ -1,6 +1,6 @@
 # teste-dev — API de consulta de CEP resiliente
 
-Enunciado em `README.md`. Glossário do domínio em `CONTEXT.md` — use os termos
+Enunciado em `DESAFIO.md`. Glossário do domínio em `CONTEXT.md` — use os termos
 de lá (**provider**, **adapter**, **falha de provider**, **ausência confirmada**,
 **ausência parcial**, **endereço vencido**, **modo degradado**) e não invente
 sinônimos.
@@ -33,16 +33,25 @@ nos testes existentes se você não escrever o teste certo.
   provider, nunca existência de dado. Se `not_found` contar como falha, o
   sistema tira providers saudáveis de jogo por causa de dados. É a invariante
   central.
+- **Só falha de provider alimenta o circuito.** `capped`, `circuit_open` e o
+  timeout cortado pelo orçamento da requisição são neutros: nesses casos quem
+  se conteve fomos nós, não o provider que falhou.
 - **A porta do provider nunca lança.** Adapter devolve resultado discriminado
   com uma razão da união fechada. No fluxo de consulta existe **um** `throw`,
   no orquestrador, e o sistema tem **um** exception filter. A validação de
-  entrada rejeita pelo pipe do Nest e cai no mesmo filter (ADR-0003).
+  entrada rejeita pelo pipe do Nest, e o limite de entrada pelo guard; os dois
+  caem no mesmo filter (ADR-0003).
 - **Frescor não é o TTL do store.** O TTL do store é a janela de vencimento; o
   valor carrega o instante da gravação e o frescor é calculado na leitura. Se
   inverter, endereço vencido deixa de existir.
 - **Adapters não implementam resiliência.** Timeout, circuito, concorrência e
   fallback vivem fora deles. Adapter sabe montar consulta e traduzir resposta.
 - **Validação de resposta de provider é `safeParse`, nunca `parse`.**
+- **Endereço canônico nasce validado, e só por formato.** Todo adapter o
+  constrói pelo schema do endereço canônico, que recusa com `schema_invalid`.
+  Regras de plausibilidade (este CEP pertence a esta UF?) ficam de fora: a
+  recusa é falha de provider e alimentaria o circuito com problema de dado
+  (ADR-0004).
 - **Timeout aborta de verdade.** `AbortController` com o `signal` no cliente
   HTTP; `Promise.race` sozinho deixa a requisição viva.
 - **Quem introduz um resultado novo entrega a linha de log dele no mesmo

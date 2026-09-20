@@ -3,6 +3,7 @@ import { Logger } from 'nestjs-pino';
 import { pino } from 'pino';
 import { AppModule } from './app.module.js';
 import { CONFIG, InvalidConfig, type Config } from './config.js';
+import { setupOpenApi } from './openapi.js';
 
 // logger: false keeps Nest from printing unstructured lines before Pino exists.
 const app = await NestFactory.create(AppModule, {
@@ -19,4 +20,5 @@ const app = await NestFactory.create(AppModule, {
 });
 app.useLogger(app.get(Logger));
 app.enableShutdownHooks();
+setupOpenApi(app);
 await app.listen(app.get<Config>(CONFIG).PORT);

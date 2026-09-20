@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   FailureReason,
+  toCanonicalAddress,
   type AddressLookup,
   type LookupResult,
 } from '../address-lookup.js';
@@ -17,8 +18,8 @@ const notFoundSchema = z.object({
 const responseSchema = z.object({
   street: z.string(),
   neighborhood: z.string(),
-  city: z.string().min(1),
-  state: z.string().regex(/^[A-Z]{2}$/),
+  city: z.string(),
+  state: z.string(),
 });
 
 // Two known limits, accepted and not handled (ADR-0004): for a zip code that
@@ -47,16 +48,13 @@ export class BrasilApiLookup implements AddressLookup {
       return { ok: false, reason: FailureReason.SchemaInvalid };
     }
     const { street, neighborhood, city, state } = parsed.data;
-    return {
-      ok: true,
-      address: {
-        zipCode,
-        street: blankToNull(street),
-        complement: null,
-        neighborhood: blankToNull(neighborhood),
-        city,
-        state,
-      },
-    };
+    return toCanonicalAddress({
+      zipCode,
+      street: blankToNull(street),
+      complement: null,
+      neighborhood: blankToNull(neighborhood),
+      city,
+      state,
+    });
   }
 }
